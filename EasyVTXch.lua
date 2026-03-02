@@ -23,12 +23,9 @@ local CMD_PARAM_WRITE = 0x2D
 
 local TYPE_UINT8      = 0
 local TYPE_TEXT_SEL   = 9
-local TYPE_STRING     = 10
 local TYPE_FOLDER     = 11
-local TYPE_INFO       = 12
 local TYPE_COMMAND    = 13
 
-local LCS_IDLE      = 0
 local LCS_START     = 1
 local LCS_CONFIRMED = 4
 
@@ -90,18 +87,29 @@ local crsf = {
 
 local pending = { band = nil, channel = nil }
 local statusText = "Connecting..."
-local currentText = ""
 local selectedBand = "R"
 local favorites = {}
+local favLookup = {}  -- { ["R1"]=true, ... } for O(1) lookup
 local exitScript = false
 local dirtyAll = false
+local bwItemsDirty = true  -- invalidate B&W item cache
 
 ---- [3] Favorites Persistence ----
+
+local function rebuildFavLookup()
+  favLookup = {}
+  for _, fav in ipairs(favorites) do
+    favLookup[fav.band .. fav.channel] = true
+  end
+end
 
 local function loadFavorites()
   favorites = {}
   local f = io.open(FAV_PATH, "r")
-  if not f then return end
+  if not f then
+    rebuildFavLookup()
+    return
+  end
   local buf = ""
   while true do
     local chunk = io.read(f, 128)
@@ -110,7 +118,6 @@ local function loadFavorites()
   end
   io.close(f)
   for line in string.gmatch(buf .. "\n", "([^\r\n]+)") do
-    -- "band:X" line stores last selected band
     if string.sub(line, 1, 5) == "band:" then
       local b = string.upper(string.sub(line, 6, 6))
       if BAND_VALUES[b] then selectedBand = b end
@@ -122,6 +129,7 @@ local function loadFavorites()
       end
     end
   end
+  rebuildFavLookup()
 end
 
 local function saveFavorites()
@@ -135,29 +143,33 @@ local function saveFavorites()
 end
 
 local function isFavorite(band, ch)
-  for _, fav in ipairs(favorites) do
-    if fav.band == band and fav.channel == ch then return true end
-  end
-  return false
+  return favLookup[band .. ch] == true
 end
 
 local function toggleFavorite(band, ch)
-  for i, fav in ipairs(favorites) do
-    if fav.band == band and fav.channel == ch then
-      table.remove(favorites, i)
-      saveFavorites()
-      return false
+  local key = band .. ch
+  local wasAdded
+  if favLookup[key] then
+    for i, fav in ipairs(favorites) do
+      if fav.band == band and fav.channel == ch then
+        table.remove(favorites, i)
+        break
+      end
     end
+    wasAdded = false
+  else
+    favorites[#favorites + 1] = { band = band, channel = ch }
+    wasAdded = true
   end
-  favorites[#favorites + 1] = { band = band, channel = ch }
+  rebuildFavLookup()
+  bwItemsDirty = true
   saveFavorites()
-  return true
+  return wasAdded
 end
 
 ---- [4] CRSF Communication ----
 
 local findVtxFields
-local updateCurrentText
 local refreshUi
 
 local function getFreq(band, ch)
@@ -257,10 +269,8 @@ local function parseFieldData(fieldId, d)
 
   if field.type == TYPE_TEXT_SEL then
     field.options, i = fieldGetString(d, i)
-    if i <= #d then field.value = d[i]; i = i + 1 end
-    if i <= #d then field.min = d[i]; i = i + 1 end
-    if i <= #d then field.max = d[i]; i = i + 1 end
-  elseif field.type == TYPE_UINT8 then
+  end
+  if field.type == TYPE_TEXT_SEL or field.type == TYPE_UINT8 then
     if i <= #d then field.value = d[i]; i = i + 1 end
     if i <= #d then field.min = d[i]; i = i + 1 end
     if i <= #d then field.max = d[i]; i = i + 1 end
@@ -345,17 +355,15 @@ findVtxFields = function()
 
   crsf.state = State.READY
   statusText = "Ready"
-  updateCurrentText()
   refreshUi()
 end
 
-updateCurrentText = function()
+local function getCurrentText()
   if crsf.currentBand and crsf.currentChannel then
     local freq = getFreq(crsf.currentBand, crsf.currentChannel)
-    currentText = crsf.currentBand .. crsf.currentChannel .. " " .. freq .. "MHz"
-  else
-    currentText = "Unknown"
+    return crsf.currentBand .. crsf.currentChannel .. " " .. freq .. "MHz"
   end
+  return ""
 end
 
 refreshUi = function()
@@ -364,44 +372,32 @@ end
 
 ---- [5] VTX Commander ----
 
+local function writeParam(fieldId, value, nextState)
+  crsfPush(CMD_PARAM_WRITE, {
+    crsf.deviceId, crsf.handsetId, fieldId, value
+  })
+  crsf.state = nextState
+  crsf.timer = getTime()
+end
+
 local function sendChannel(band, ch)
   if crsf.state ~= State.READY then return end
-  pending.band = band
-  pending.channel = ch
-
   local bandVal = BAND_VALUES[band]
   if not bandVal then return end
 
+  pending.band = band
+  pending.channel = ch
   statusText = "Setting " .. band .. ch .. "..."
-  crsfPush(CMD_PARAM_WRITE, {
-    crsf.deviceId, crsf.handsetId, crsf.bandFieldId, bandVal
-  })
-  crsf.state = State.WRITING_BAND
-  crsf.timer = getTime()
+  writeParam(crsf.bandFieldId, bandVal, State.WRITING_BAND)
 end
 
 local function continueApply()
   if crsf.state == State.WRITING_BAND then
-    crsfPush(CMD_PARAM_WRITE, {
-      crsf.deviceId, crsf.handsetId, crsf.channelFieldId, pending.channel
-    })
-    crsf.state = State.WRITING_CHAN
-    crsf.timer = getTime()
-
+    writeParam(crsf.channelFieldId, pending.channel, State.WRITING_CHAN)
   elseif crsf.state == State.WRITING_CHAN then
-    crsfPush(CMD_PARAM_WRITE, {
-      crsf.deviceId, crsf.handsetId, crsf.sendFieldId, LCS_START
-    })
-    crsf.state = State.WRITING_SEND
-    crsf.timer = getTime()
-
+    writeParam(crsf.sendFieldId, LCS_START, State.WRITING_SEND)
   elseif crsf.state == State.WRITING_SEND then
-    crsfPush(CMD_PARAM_WRITE, {
-      crsf.deviceId, crsf.handsetId, crsf.sendFieldId, LCS_CONFIRMED
-    })
-    crsf.state = State.CONFIRMING
-    crsf.timer = getTime()
-
+    writeParam(crsf.sendFieldId, LCS_CONFIRMED, State.CONFIRMING)
   elseif crsf.state == State.CONFIRMING then
     crsf.currentBand = pending.band
     crsf.currentChannel = pending.channel
@@ -409,7 +405,6 @@ local function continueApply()
     pending.channel = nil
     crsf.state = State.READY
     statusText = "Sent!"
-    updateCurrentText()
     refreshUi()
   end
 end
@@ -432,8 +427,7 @@ local function processCrsf()
     end
   end
 
-  local now = getTime()
-  local elapsed = now - crsf.timer
+  local elapsed = getTime() - crsf.timer
 
   if crsf.state == State.PINGING and elapsed > TIMEOUT_PING then
     if crsf.retryCount < RETRY_MAX then
@@ -445,14 +439,11 @@ local function processCrsf()
     end
   elseif crsf.state == State.ENUMERATING and elapsed > TIMEOUT_ENUM then
     requestField(crsf.loadIdx)
-  elseif crsf.state == State.WRITING_BAND and elapsed > TIMEOUT_WRITE then
-    continueApply()
-  elseif crsf.state == State.WRITING_CHAN and elapsed > TIMEOUT_WRITE then
-    continueApply()
-  elseif crsf.state == State.WRITING_SEND and elapsed > TIMEOUT_SEND then
-    continueApply()
-  elseif crsf.state == State.CONFIRMING and elapsed > TIMEOUT_SEND then
-    continueApply()
+  elseif crsf.state >= State.WRITING_BAND and crsf.state <= State.CONFIRMING then
+    local timeout = (crsf.state <= State.WRITING_CHAN) and TIMEOUT_WRITE or TIMEOUT_SEND
+    if elapsed > timeout then
+      continueApply()
+    end
   end
 end
 
@@ -462,14 +453,15 @@ local function isReady()
   return crsf.state == State.READY
 end
 
--- Widget references for set() updates without rebuild
 local ui = {
   bandBtns = {},  -- { [bandName] = btn }
-  chanBtns = {},  -- { [ch] = btn }
 }
 
+local bandDirty = false  -- track if band changed (save on exit)
+
 local function updateBandUi()
-  saveFavorites()
+  bandDirty = true
+  bwItemsDirty = true
   dirtyAll = true
 end
 
@@ -478,11 +470,10 @@ local function buildUi()
 
   lvgl.clear()
   ui.bandBtns = {}
-  ui.chanBtns = {}
 
   local page = lvgl.page({
     title = "EasyVTXch",
-    subtitle = function() return currentText end,
+    subtitle = getCurrentText,
     back = function()
       exitScript = true
     end,
@@ -560,7 +551,7 @@ local function buildUi()
     local row = parent:box({ flexFlow = lvgl.FLOW_ROW, flexPad = lvgl.PAD_SMALL })
     for ch = startCh, endCh do
       local c = ch
-      local btn = row:button({
+      row:button({
         w = 108, h = 50,
         text = selectedBand .. c .. "\n" .. getFreq(selectedBand, c),
         checked = isFavorite(selectedBand, c),
@@ -571,7 +562,6 @@ local function buildUi()
           dirtyAll = true
         end,
       })
-      ui.chanBtns[c] = btn
     end
   end
 
@@ -597,23 +587,27 @@ local bw = {
   scrollOffset = 0,
 }
 
+local bwItemsCache = {}
+
 local function getBwItems()
-  local items = {}
+  if not bwItemsDirty then return bwItemsCache end
+  bwItemsCache = {}
   for _, fav in ipairs(favorites) do
-    items[#items + 1] = {
+    bwItemsCache[#bwItemsCache + 1] = {
       label = "* " .. fav.band .. fav.channel .. " " .. getFreq(fav.band, fav.channel),
       band = fav.band,
       channel = fav.channel,
     }
   end
   for ch = 1, 8 do
-    items[#items + 1] = {
+    bwItemsCache[#bwItemsCache + 1] = {
       label = selectedBand .. ch .. " " .. getFreq(selectedBand, ch),
       band = selectedBand,
       channel = ch,
     }
   end
-  return items
+  bwItemsDirty = false
+  return bwItemsCache
 end
 
 local function drawBwUi()
@@ -621,8 +615,9 @@ local function drawBwUi()
   lcd.drawText(1, 0, "EasyVTXch", BOLD)
   lcd.drawText(70, 0, statusText, SMLSIZE)
 
-  if currentText ~= "" then
-    lcd.drawText(1, 9, "Now:" .. currentText, SMLSIZE)
+  local ct = getCurrentText()
+  if ct ~= "" then
+    lcd.drawText(1, 9, "Now:" .. ct, SMLSIZE)
   end
 
   lcd.drawText(1, 17, "Band:" .. selectedBand, SMLSIZE + INVERS)
@@ -674,6 +669,8 @@ local function handleBwEvent(event)
     idx = idx + 1
     if idx > #BAND_NAMES then idx = 1 end
     selectedBand = BAND_NAMES[idx]
+    bandDirty = true
+    bwItemsDirty = true
   end
 end
 
@@ -692,6 +689,7 @@ end
 
 local function run(event, touchState)
   if event == EVT_VIRTUAL_EXIT and lvgl == nil then
+    if bandDirty then saveFavorites() end
     return 2
   end
 
@@ -715,7 +713,10 @@ local function run(event, touchState)
     drawBwUi()
   end
 
-  if exitScript then return 2 end
+  if exitScript then
+    if bandDirty then saveFavorites() end
+    return 2
+  end
   return 0
 end
 
