@@ -1,0 +1,4 @@
+*.luac
+*.fav
+/tmp/
+.DS_Store
