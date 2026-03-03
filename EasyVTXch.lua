@@ -29,8 +29,8 @@ local TYPE_COMMAND    = 13
 local LCS_START     = 1
 local LCS_CONFIRMED = 4
 
-local BAND_NAMES = { "A", "B", "E", "F", "R", "L" }
-local BAND_VALUES = { A = 1, B = 2, E = 3, F = 4, R = 5, L = 6 }
+local BAND_NAMES = { "A", "B", "E", "F", "R" }
+local BAND_VALUES = { A = 1, B = 2, E = 3, F = 4, R = 5 }
 
 local FREQ = {
   A = { 5865, 5845, 5825, 5805, 5785, 5765, 5745, 5725 },
@@ -38,10 +38,10 @@ local FREQ = {
   E = { 5705, 5685, 5665, 5645, 5885, 5905, 5925, 5945 },
   F = { 5740, 5760, 5780, 5800, 5820, 5840, 5860, 5880 },
   R = { 5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917 },
-  L = { 5362, 5399, 5436, 5473, 5510, 5547, 5584, 5621 },
 }
 
 local FAV_PATH = "/SCRIPTS/TOOLS/easyvtxch.fav"
+local VTX_TABLE_PATH = "/SCRIPTS/TOOLS/vtx_table.lua"
 
 local TIMEOUT_PING = 300   -- 300 * 10ms = 3s
 local TIMEOUT_ENUM = 100   -- 100 * 10ms = 1s per field
@@ -167,7 +167,44 @@ local function toggleFavorite(band, ch)
   return wasAdded
 end
 
----- [4] CRSF Communication ----
+---- [4] VTX Table Loader ----
+
+local function loadVtxTable()
+  local ok, loader = pcall(loadfile, VTX_TABLE_PATH)
+  if not ok or not loader then return false end
+  local ok2, tbl = pcall(loader)
+  if not ok2 or type(tbl) ~= "table" then return false end
+
+  local bt = tbl.bandTable
+  local ft = tbl.frequencyTable
+  if not bt or not ft then return false end
+
+  local names = {}
+  local values = {}
+  local freq = {}
+
+  -- bandTable uses [0] for "U" band; 1-based loop skips it intentionally.
+  -- Index i matches ELRS band value and frequencyTable index.
+  for i = 1, #bt do
+    local letter = bt[i]
+    if type(letter) == "string" and letter ~= " " and #letter == 1 then
+      names[#names + 1] = letter
+      values[letter] = i
+      if ft[i] then
+        freq[letter] = ft[i]
+      end
+    end
+  end
+
+  if #names == 0 then return false end
+
+  BAND_NAMES = names
+  BAND_VALUES = values
+  FREQ = freq
+  return true
+end
+
+---- [5] CRSF Communication ----
 
 local findVtxFields
 local refreshUi
@@ -370,7 +407,7 @@ refreshUi = function()
   dirtyAll = true
 end
 
----- [5] VTX Commander ----
+---- [6] VTX Commander ----
 
 local function writeParam(fieldId, value, nextState)
   crsfPush(CMD_PARAM_WRITE, {
@@ -393,7 +430,8 @@ end
 
 local function continueApply()
   if crsf.state == State.WRITING_BAND then
-    writeParam(crsf.channelFieldId, pending.channel, State.WRITING_CHAN)
+    -- Channel is 0-based in CRSF protocol (0-7), UI uses 1-based (1-8)
+    writeParam(crsf.channelFieldId, pending.channel - 1, State.WRITING_CHAN)
   elseif crsf.state == State.WRITING_CHAN then
     writeParam(crsf.sendFieldId, LCS_START, State.WRITING_SEND)
   elseif crsf.state == State.WRITING_SEND then
@@ -409,7 +447,7 @@ local function continueApply()
   end
 end
 
----- [6] CRSF Processing (called every frame in run()) ----
+---- [7] CRSF Processing (called every frame in run()) ----
 
 local function processCrsf()
   for _ = 1, 20 do
@@ -447,7 +485,7 @@ local function processCrsf()
   end
 end
 
----- [7] LVGL UI ----
+---- [8] LVGL UI ----
 
 local function isReady()
   return crsf.state == State.READY
@@ -580,7 +618,7 @@ local function buildUi()
   })
 end
 
----- [8] B&W Fallback (128x64) ----
+---- [9] B&W Fallback (128x64) ----
 
 local bw = {
   cursor = 1,
@@ -674,9 +712,10 @@ local function handleBwEvent(event)
   end
 end
 
----- [9] init / run ----
+---- [10] init / run ----
 
 local function init()
+  loadVtxTable()
   loadFavorites()
 
   if lvgl ~= nil then
