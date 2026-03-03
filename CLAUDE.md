@@ -33,6 +33,9 @@ Single-file EdgeTX Lua script (`EasyVTXch.lua`) for simplified VTX channel chang
 - Field IDs are **dynamic** per firmware version — always discover by name, never hardcode
 - Use `crossfireTelemetryPush`/`Pop` with nil-check wrappers (`crsfPush`/`crsfPop`)
 - Handle `crossfireTelemetryPop` returning `false` (not just `nil`) — use `not cmd` instead of `cmd == nil`
+- **Channel values are 0-based** in ELRS CRSF (0-7). Use `field.min + (uiChannel - 1)` to convert from UI (1-8). Never hardcode the offset — use the `min` from CRSF enumeration
+- **Band values are 1-based** TEXT_SELECTION indices (A=1, B=2, E=3, F=4, R=5)
+- **Validate PARAM_RESP fieldId** before advancing write state — check `data[3]` matches the expected field
 
 ### Deployment
 - **Always delete `.luac` when updating `.lua`!** EdgeTX caches compiled bytecode
@@ -42,7 +45,7 @@ Single-file EdgeTX Lua script (`EasyVTXch.lua`) for simplified VTX channel chang
 ```bash
 lua5.4 test_mock.lua
 ```
-Tests cover: init ping, device info parsing, field enumeration, VTX send sequence, favorites file format. CRSF communication and LVGL UI must be tested on real hardware or EdgeTX Companion simulator.
+Tests cover: init ping, device info parsing, field enumeration, VTX send sequence (with value assertions for band/channel/send/confirm), favorites file format. CRSF communication and LVGL UI must be tested on real hardware or EdgeTX Companion simulator.
 
 ## Font Constants
 Use EdgeTX standard constants: `SMLSIZE`, `MIDSIZE`, `DBLSIZE`, `XXLSIZE`, `BOLD`, `INVERS`, `CENTER`

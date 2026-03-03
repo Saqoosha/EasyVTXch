@@ -117,9 +117,16 @@ CONFIRMING    → write Send VTx (confirm) → wait 200ms or response → READY
 
 Each step: `CMD_PARAM_WRITE` with `{deviceId, handsetId, fieldId, value}`
 
+Channel value conversion: `field.min + (uiChannel - 1)` where `field.min` is discovered during enumeration. ELRS uses 0-based (`min=0, max=7`) but the script adapts dynamically.
+
+Band value: 1-based TEXT_SELECTION index (A=1, B=2, E=3, F=4, R=5).
+
 Send VTx values:
 - `LCS_START = 1` — initiate send
 - `LCS_CONFIRMED = 4` — confirm send
+
+### PARAM_RESP Validation
+During the SENDING sequence, incoming `CMD_PARAM_RESP` messages are validated: the response's `fieldId` (data[3]) must match the field being written (band/channel/send) before advancing to the next state. This prevents unrelated responses from accidentally progressing the state machine.
 
 ## LVGL UI Architecture
 
@@ -146,7 +153,7 @@ The UI uses a **full rebuild** approach via `dirtyAll` flag:
 1. Band switch or favorite toggle sets `dirtyAll = true`
 2. In `run()`, if `dirtyAll`: call `lvgl.clear()` then `buildUi()`
 3. All widget properties (`checked`, `text`) are computed fresh at build time
-4. Dynamic text functions (`text = function()`) used only for continuously changing values (statusText, currentText/subtitle)
+4. Dynamic text functions (`text = function()`) used only for continuously changing values (statusText, subtitle via `getCurrentText()`)
 
 **Why not partial updates:**
 - `box:clear()` doesn't work in EdgeTX LVGL
@@ -155,6 +162,13 @@ The UI uses a **full rebuild** approach via `dirtyAll` flag:
 - Full `lvgl.clear()` + rebuild is the only reliable method
 
 **Tradeoff:** Focus resets to first element on rebuild. Focus control is not available in EdgeTX Lua API.
+
+### Performance Optimizations
+- **`favLookup`**: Hash table `{ ["R1"]=true, ... }` rebuilt on favorite change for O(1) `isFavorite()` lookups
+- **`bandDirty`**: Defers `saveFavorites()` to script exit instead of saving on every band switch (reduces flash wear)
+- **`bwItemsDirty`**: Caches B&W mode item list, invalidated only on band switch or favorite toggle (avoids per-frame allocation)
+- **`getCurrentText()`**: Derived function instead of cached state variable (eliminates stale state risk)
+- **`writeParam()`**: Helper that consolidates `crsfPush` + state transition + timer reset
 
 ### CRSF Nil-Safety
 ```lua
