@@ -59,7 +59,7 @@ local State = {
   WRITING_CHAN   = 5,
   WRITING_SEND  = 6,
   CONFIRMING    = 7,
-  ERROR         = 9,
+  ERROR         = 8,
 }
 
 local crsf = {
@@ -139,6 +139,7 @@ local function saveFavorites()
   end
   io.write(f, "band:" .. selectedBand .. "\n")
   io.close(f)
+  bandDirty = false
 end
 
 local function isFavorite(band, ch)
@@ -392,8 +393,11 @@ end
 
 local function continueApply()
   if crsf.state == State.WRITING_BAND then
-    -- Channel is 0-based in CRSF protocol (0-7), UI uses 1-based (1-8)
-    writeParam(crsf.channelFieldId, pending.channel - 1, State.WRITING_CHAN)
+    -- Convert UI channel (1-8) to CRSF value using discovered field.min
+    -- ELRS uses 0-based (min=0, max=7), but adapts if firmware differs
+    local chanField = crsf.fields[crsf.channelFieldId]
+    local chanMin = (chanField and chanField.min) or 0
+    writeParam(crsf.channelFieldId, chanMin + (pending.channel - 1), State.WRITING_CHAN)
   elseif crsf.state == State.WRITING_CHAN then
     writeParam(crsf.sendFieldId, LCS_START, State.WRITING_SEND)
   elseif crsf.state == State.WRITING_SEND then
@@ -422,7 +426,15 @@ local function processCrsf()
       if crsf.state == State.ENUMERATING then
         parseParamInfo(data)
       elseif crsf.state >= State.WRITING_BAND and crsf.state <= State.CONFIRMING then
-        continueApply()
+        -- Verify response is for the field we're writing
+        local respFieldId = data and data[3]
+        local expectedId =
+          (crsf.state == State.WRITING_BAND and crsf.bandFieldId) or
+          (crsf.state == State.WRITING_CHAN and crsf.channelFieldId) or
+          crsf.sendFieldId
+        if respFieldId == expectedId then
+          continueApply()
+        end
       end
     end
   end

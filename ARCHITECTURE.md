@@ -41,7 +41,7 @@ EasyVTXch.lua
 | Type | Value | Used For |
 |------|-------|----------|
 | `UINT8` | `0` | Channel number |
-| `TEXT_SELECTION` | `9` | Band selection (Off/A/B/E/F/R/L) |
+| `TEXT_SELECTION` | `9` | Band selection (Off/A/B/E/F/R) |
 | `FOLDER` | `11` | VTX Administrator folder |
 | `COMMAND` | `13` | Send VTx button |
 
@@ -109,8 +109,8 @@ IDLE → PINGING → ENUMERATING → READY ⇄ SENDING
 
 ### SENDING (4-step sequence)
 ```
-WRITING_BAND  → write band value       → wait 150ms or response
-WRITING_CHAN  → write channel value     → wait 150ms or response
+WRITING_BAND  → write band value (1-based: A=1..R=5) → wait 150ms or response
+WRITING_CHAN  → write channel (field.min + ch-1, typically 0-based) → wait 150ms or response
 WRITING_SEND  → write Send VTx (start) → wait 200ms or response
 CONFIRMING    → write Send VTx (confirm) → wait 200ms or response → READY
 ```
@@ -131,7 +131,7 @@ page (title="EasyVTXch", subtitle=dynamic currentText)
 │   └── row(s) (FLOW_ROW, 4 buttons per row)
 │       └── button × N (static text, active=isReady)
 ├── bandBox (FLOW_ROW)
-│   └── button × 6 (A/B/E/F/R/L, checked=selected, active=isReady)
+│   └── button × 5 (A/B/E/F/R, checked=selected, active=isReady)
 ├── chanBox (FLOW_COLUMN)
 │   ├── row1 (FLOW_ROW)
 │   │   └── button × 4 (ch 1-4, static text, checked=isFavorite, active=isReady)
@@ -203,12 +203,11 @@ band:R
 | E    | 5705 | 5685 | 5665 | 5645 | 5885 | 5905 | 5925 | 5945 |
 | F    | 5740 | 5760 | 5780 | 5800 | 5820 | 5840 | 5860 | 5880 |
 | R    | 5658 | 5695 | 5732 | 5769 | 5806 | 5843 | 5880 | 5917 |
-| L    | 5362 | 5399 | 5436 | 5473 | 5510 | 5547 | 5584 | 5621 |
 
 ## Band Values (CRSF)
 
-ELRS TEXT_SELECTION options: `"Off;A;B;E;F;R;L"`
-- Off=0, A=1, B=2, E=3, F=4, R=5, L=6
+ELRS TEXT_SELECTION options: `"Off;A;B;E;F;R"`
+- Off=0, A=1, B=2, E=3, F=4, R=5
 
 ## Timeouts
 

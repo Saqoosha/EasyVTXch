@@ -178,12 +178,13 @@ script.run(0)
 advanceTime(1)
 
 -- Field 3: Channel (type=0, UINT8, parent=1)
+-- CRSF channel is 0-based (0-7), min=0, max=7
 clearCrsfOutbox()
 local f3payload = { 1, 0 } -- parent=1, type=UINT8(0)
 for _, b in ipairs(strBytes("Channel")) do f3payload[#f3payload + 1] = b end
-f3payload[#f3payload + 1] = 4 -- value (ch 4)
-f3payload[#f3payload + 1] = 1 -- min
-f3payload[#f3payload + 1] = 8 -- max
+f3payload[#f3payload + 1] = 3 -- value (ch 4 = 0-based 3)
+f3payload[#f3payload + 1] = 0 -- min
+f3payload[#f3payload + 1] = 7 -- max
 injectCrsfResponse(0x2B, paramResp(3, 0, f3payload))
 script.run(0)
 advanceTime(1)
@@ -261,7 +262,10 @@ script.run(EVT_VIRTUAL_ENTER)
 outbox = getCrsfOutbox()
 if #outbox >= 1 then
   assert(outbox[1].cmd == 0x2D, "Expected CMD_PARAM_WRITE (0x2D)")
-  print("PASS: Band write sent")
+  -- Verify band value: R=5 (1-based, TEXT_SELECTION index)
+  local bandWriteData = outbox[1].data
+  assert(bandWriteData[4] == 5, "Expected band value 5 (R), got " .. tostring(bandWriteData[4]))
+  print("PASS: Band write sent (R=5)")
 
   -- Advance time past TIMEOUT_WRITE (15 ticks)
   advanceTime(20)
@@ -271,7 +275,10 @@ if #outbox >= 1 then
   outbox = getCrsfOutbox()
   if #outbox >= 1 then
     assert(outbox[1].cmd == 0x2D, "Expected channel write")
-    print("PASS: Channel write sent")
+    -- Verify channel value: ch6 = 0-based 5
+    local chanWriteData = outbox[1].data
+    assert(chanWriteData[4] == 5, "Expected 0-based channel value 5 for ch6, got " .. tostring(chanWriteData[4]))
+    print("PASS: Channel write sent (ch6 = 0-based 5)")
 
     -- Advance time for Send VTx
     advanceTime(20)
@@ -280,7 +287,9 @@ if #outbox >= 1 then
 
     outbox = getCrsfOutbox()
     if #outbox >= 1 then
-      print("PASS: Send VTx command sent")
+      -- Verify Send VTx value: LCS_START = 1
+      assert(outbox[1].data[4] == 1, "Expected LCS_START (1), got " .. tostring(outbox[1].data[4]))
+      print("PASS: Send VTx command sent (LCS_START=1)")
 
       -- Advance time for Confirm
       advanceTime(25)
@@ -289,7 +298,9 @@ if #outbox >= 1 then
 
       outbox = getCrsfOutbox()
       if #outbox >= 1 then
-        print("PASS: Send VTx confirm sent")
+        -- Verify confirm value: LCS_CONFIRMED = 4
+        assert(outbox[1].data[4] == 4, "Expected LCS_CONFIRMED (4), got " .. tostring(outbox[1].data[4]))
+        print("PASS: Send VTx confirm sent (LCS_CONFIRMED=4)")
 
         -- Final confirm timeout
         advanceTime(25)

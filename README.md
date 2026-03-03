@@ -8,7 +8,7 @@ ELRS VTX Admin requires 8-10 button presses to change a VTX channel (SYS → Too
 
 - **One-tap channel switching** — tap any channel button to send VTX command immediately
 - **Favorites** — long-press a channel to star it. Favorites appear at the top in a grid for quick access
-- **All bands** — A, B, E, F, R, L bands with 8 channels each
+- **All bands** — A, B, E, F, R bands with 8 channels each
 - **Frequency display** — each channel button shows its frequency
 - **Persistent state** — favorites and last selected band are saved across sessions
 - **Color LCD UI** — LVGL-based UI for 480×272 color radios (TX16S, TX18S, etc.)
@@ -30,7 +30,7 @@ ELRS VTX Admin requires 8-10 button presses to change a VTX channel (SYS → Too
 ### Color LCD (LVGL)
 - **Tap a channel** → sends VTX band + channel + Send VTx command
 - **Long-press a channel** → toggles favorite (shown with checked/highlighted background)
-- **Tap a band button** (A/B/E/F/R/L) → switches the channel grid
+- **Tap a band button** (A/B/E/F/R) → switches the channel grid
 - **Long-press a favorite** → removes it from favorites
 
 ### B&W LCD
