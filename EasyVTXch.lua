@@ -394,7 +394,7 @@ end
 local function continueApply()
   if crsf.state == State.WRITING_BAND then
     -- Convert UI channel (1-8) to CRSF value using discovered field.min
-    -- ELRS uses 0-based (min=0, max=7), but adapts if firmware differs
+    -- ELRS field is 1-based (min=1, max=8); firmware converts internally
     local chanField = crsf.fields[crsf.channelFieldId]
     local chanMin = (chanField and chanField.min) or 0
     writeParam(crsf.channelFieldId, chanMin + (pending.channel - 1), State.WRITING_CHAN)

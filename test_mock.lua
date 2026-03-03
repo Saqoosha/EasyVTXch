@@ -178,13 +178,14 @@ script.run(0)
 advanceTime(1)
 
 -- Field 3: Channel (type=0, UINT8, parent=1)
--- CRSF channel is 0-based (0-7), min=0, max=7
+-- CRSF channel field is 1-based (min=1, max=8) per ELRS firmware (tx_devLUA.cpp)
+-- Firmware internally converts to 0-based via: config.SetVtxChannel(arg - 1)
 clearCrsfOutbox()
 local f3payload = { 1, 0 } -- parent=1, type=UINT8(0)
 for _, b in ipairs(strBytes("Channel")) do f3payload[#f3payload + 1] = b end
-f3payload[#f3payload + 1] = 3 -- value (ch 4 = 0-based 3)
-f3payload[#f3payload + 1] = 0 -- min
-f3payload[#f3payload + 1] = 7 -- max
+f3payload[#f3payload + 1] = 4 -- value (ch 4, 1-based)
+f3payload[#f3payload + 1] = 1 -- min (1-based per ELRS)
+f3payload[#f3payload + 1] = 8 -- max
 injectCrsfResponse(0x2B, paramResp(3, 0, f3payload))
 script.run(0)
 advanceTime(1)
@@ -275,10 +276,10 @@ if #outbox >= 1 then
   outbox = getCrsfOutbox()
   if #outbox >= 1 then
     assert(outbox[1].cmd == 0x2D, "Expected channel write")
-    -- Verify channel value: ch6 = 0-based 5
+    -- Verify channel value: ch6 = 1-based 6 (field.min=1, so 1+(6-1)=6)
     local chanWriteData = outbox[1].data
-    assert(chanWriteData[4] == 5, "Expected 0-based channel value 5 for ch6, got " .. tostring(chanWriteData[4]))
-    print("PASS: Channel write sent (ch6 = 0-based 5)")
+    assert(chanWriteData[4] == 6, "Expected 1-based channel value 6 for ch6, got " .. tostring(chanWriteData[4]))
+    print("PASS: Channel write sent (ch6 = 1-based 6)")
 
     -- Advance time for Send VTx
     advanceTime(20)

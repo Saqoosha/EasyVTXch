@@ -33,7 +33,7 @@ Single-file EdgeTX Lua script (`EasyVTXch.lua`) for simplified VTX channel chang
 - Field IDs are **dynamic** per firmware version — always discover by name, never hardcode
 - Use `crossfireTelemetryPush`/`Pop` with nil-check wrappers (`crsfPush`/`crsfPop`)
 - Handle `crossfireTelemetryPop` returning `false` (not just `nil`) — use `not cmd` instead of `cmd == nil`
-- **Channel values are 0-based** in ELRS CRSF (0-7). Use `field.min + (uiChannel - 1)` to convert from UI (1-8). Never hardcode the offset — use the `min` from CRSF enumeration
+- **Channel values are 1-based** in ELRS CRSF (`min=1, max=8`). Use `field.min + (uiChannel - 1)` to convert from UI (1-8). The firmware internally converts to 0-based via `SetVtxChannel(arg - 1)`. Never hardcode the offset — use the `min` from CRSF enumeration
 - **Band values are 1-based** TEXT_SELECTION indices (A=1, B=2, E=3, F=4, R=5)
 - **Validate PARAM_RESP fieldId** before advancing write state — check `data[3]` matches the expected field
 

@@ -110,14 +110,14 @@ IDLE → PINGING → ENUMERATING → READY ⇄ SENDING
 ### SENDING (4-step sequence)
 ```
 WRITING_BAND  → write band value (1-based: A=1..R=5) → wait 150ms or response
-WRITING_CHAN  → write channel (field.min + ch-1, typically 0-based) → wait 150ms or response
+WRITING_CHAN  → write channel (field.min + ch-1, ELRS: 1-based)    → wait 150ms or response
 WRITING_SEND  → write Send VTx (start) → wait 200ms or response
 CONFIRMING    → write Send VTx (confirm) → wait 200ms or response → READY
 ```
 
 Each step: `CMD_PARAM_WRITE` with `{deviceId, handsetId, fieldId, value}`
 
-Channel value conversion: `field.min + (uiChannel - 1)` where `field.min` is discovered during enumeration. ELRS uses 0-based (`min=0, max=7`) but the script adapts dynamically.
+Channel value conversion: `field.min + (uiChannel - 1)` where `field.min` is discovered during enumeration. ELRS defines Channel as `min=1, max=8` (1-based). The firmware callback does `SetVtxChannel(arg - 1)` to convert to its internal 0-based storage.
 
 Band value: 1-based TEXT_SELECTION index (A=1, B=2, E=3, F=4, R=5).
 
