@@ -41,7 +41,6 @@ local FREQ = {
 }
 
 local FAV_PATH = "/SCRIPTS/TOOLS/easyvtxch.fav"
-local VTX_TABLE_PATH = "/SCRIPTS/TOOLS/vtx_table.lua"
 
 local TIMEOUT_PING = 300   -- 300 * 10ms = 3s
 local TIMEOUT_ENUM = 100   -- 100 * 10ms = 1s per field
@@ -167,44 +166,7 @@ local function toggleFavorite(band, ch)
   return wasAdded
 end
 
----- [4] VTX Table Loader ----
-
-local function loadVtxTable()
-  local ok, loader = pcall(loadfile, VTX_TABLE_PATH)
-  if not ok or not loader then return false end
-  local ok2, tbl = pcall(loader)
-  if not ok2 or type(tbl) ~= "table" then return false end
-
-  local bt = tbl.bandTable
-  local ft = tbl.frequencyTable
-  if not bt or not ft then return false end
-
-  local names = {}
-  local values = {}
-  local freq = {}
-
-  -- bandTable uses [0] for "U" band; 1-based loop skips it intentionally.
-  -- Index i matches ELRS band value and frequencyTable index.
-  for i = 1, #bt do
-    local letter = bt[i]
-    if type(letter) == "string" and letter ~= " " and #letter == 1 then
-      names[#names + 1] = letter
-      values[letter] = i
-      if ft[i] then
-        freq[letter] = ft[i]
-      end
-    end
-  end
-
-  if #names == 0 then return false end
-
-  BAND_NAMES = names
-  BAND_VALUES = values
-  FREQ = freq
-  return true
-end
-
----- [5] CRSF Communication ----
+---- [4] CRSF Communication ----
 
 local findVtxFields
 local refreshUi
@@ -407,7 +369,7 @@ refreshUi = function()
   dirtyAll = true
 end
 
----- [6] VTX Commander ----
+---- [5] VTX Commander ----
 
 local function writeParam(fieldId, value, nextState)
   crsfPush(CMD_PARAM_WRITE, {
@@ -447,7 +409,7 @@ local function continueApply()
   end
 end
 
----- [7] CRSF Processing (called every frame in run()) ----
+---- [6] CRSF Processing (called every frame in run()) ----
 
 local function processCrsf()
   for _ = 1, 20 do
@@ -485,7 +447,7 @@ local function processCrsf()
   end
 end
 
----- [8] LVGL UI ----
+---- [7] LVGL UI ----
 
 local function isReady()
   return crsf.state == State.READY
@@ -618,7 +580,7 @@ local function buildUi()
   })
 end
 
----- [9] B&W Fallback (128x64) ----
+---- [8] B&W Fallback (128x64) ----
 
 local bw = {
   cursor = 1,
@@ -712,10 +674,9 @@ local function handleBwEvent(event)
   end
 end
 
----- [10] init / run ----
+---- [9] init / run ----
 
 local function init()
-  loadVtxTable()
   loadFavorites()
 
   if lvgl ~= nil then

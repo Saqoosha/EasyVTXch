@@ -318,53 +318,6 @@ f:close()
 assert(content == "R1\nR4\nF3\n", "Favorites file content mismatch")
 print("PASS: Favorites file format is correct")
 
----- Test 7: VTX table loading (integration) ----
-print("\n=== Test 7: VTX table loading ===")
-
--- Write a mock vtx_table.lua to the path the script expects
-local vtxPath = "/SCRIPTS/TOOLS/vtx_table.lua"
--- Use /tmp for desktop test
-vtxPath = "/tmp/vtx_table.lua"
-local vf = io.open(vtxPath, "w")
-vf:write([[return {
-    frequencyTable = {
-        { 5865, 5845, 5825, 5805, 5785, 5765, 5745, 5725, },
-        { 5733, 5752, 5771, 5790, 5809, 5828, 5847, 5866, },
-        { 5705, 5685, 5665, 5645, 5885, 5905, 5925, 5945, },
-        { 5740, 5760, 5780, 5800, 5820, 5840, 5860, 5880, },
-        { 5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917, },
-        { 5653, 5693, 5733, 5773, 5813, 5853, 5893, 5933, },
-        { 5333, 5373, 5413, 5453, 5493, 5533, 5573, 5613, },
-        { 5325, 5348, 5366, 5384, 5402, 5420, 5438, 5456, },
-    },
-    frequenciesPerBand = 8,
-    bandTable = { [0]="U", "A", "B", "E", "F", "R", " ", " ", " " },
-    powerTable = { [1]="25 ", [2]="100", [3]="200", [4]="350", },
-}]])
-vf:close()
-
--- Verify the vtx_table.lua format via loadfile (same mechanism as loadVtxTable)
-local vtxTable = loadfile(vtxPath)()
-assert(type(vtxTable) == "table", "vtx_table.lua should return a table")
-assert(type(vtxTable.bandTable) == "table", "bandTable should exist")
-assert(type(vtxTable.frequencyTable) == "table", "frequencyTable should exist")
-
--- Verify bandTable structure: [0] is skipped, " " entries are skipped
-local bt = vtxTable.bandTable
-assert(bt[0] == "U", "bandTable[0] should be U (skipped by loader)")
-assert(bt[1] == "A", "bandTable[1] should be A")
-assert(bt[5] == "R", "bandTable[5] should be R")
-assert(bt[6] == " ", "bandTable[6] should be space (skipped by loader)")
-print("PASS: bandTable structure correct (U at [0], A-R at [1]-[5], spaces at [6]+)")
-
--- Verify frequencyTable aligns with bandTable indices
-local ft = vtxTable.frequencyTable
-assert(ft[1][1] == 5865, "A1 freq should be 5865, got " .. tostring(ft[1][1]))
-assert(ft[5][1] == 5658, "R1 freq should be 5658, got " .. tostring(ft[5][1]))
-print("PASS: frequencyTable indices match bandTable (ft[1]=A, ft[5]=R)")
-
-os.remove(vtxPath)
-
 ---- Summary ----
 print("\n=== All tests passed! ===")
 print("Note: CRSF communication and LVGL UI must be tested on real hardware.")
