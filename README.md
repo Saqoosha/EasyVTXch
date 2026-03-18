@@ -1,5 +1,7 @@
 # EasyVTXch
 
+> **[日本語版はこちら (Japanese)](README_ja.md)**
+
 **One-tap VTX channel changer for EdgeTX + ELRS.**
 
 Changing your VTX channel through ELRS normally takes 8-10 button presses:

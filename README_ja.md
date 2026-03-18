@@ -1,5 +1,7 @@
 # EasyVTXch
 
+> **[English version](README.md)**
+
 **EdgeTX + ELRS 用 ワンタップ VTX チャンネル切り替えスクリプト**
 
 ELRS で VTX チャンネルを変更するには通常 8〜10 回のボタン操作が必要です：
