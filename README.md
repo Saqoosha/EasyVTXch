@@ -18,6 +18,8 @@ SYS → Tools → ELRS → wait → VTX Admin → Band → Channel → Power →
 - **Remembers your settings** — favorites and last selected band persist across power cycles
 - **Works on any radio** — color LCD radios (TX16S, TX15, etc.). B&W LCD support (Boxer, Zorro, TX12, etc.) is planned but not yet tested
 
+> **Note:** EasyVTXch changes band and channel only — VTX power is not modified. Your current power setting stays as-is.
+
 ## What You Need
 
 | Requirement | Details |
