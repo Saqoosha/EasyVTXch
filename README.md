@@ -16,7 +16,7 @@ SYS → Tools → ELRS → wait → VTX Admin → Band → Channel → Power →
 - **All 5 bands** — A, B, E, F, R with 8 channels each (40 channels total)
 - **Frequency display** — every button shows the actual frequency in MHz
 - **Remembers your settings** — favorites and last selected band persist across power cycles
-- **Works on any radio** — color LCD (TX16S, TX18S, Boxer, etc.) and B&W LCD (Zorro, TX12, etc.)
+- **Works on any radio** — color LCD radios (TX16S, TX15, etc.). B&W LCD support (Boxer, Zorro, TX12, etc.) is planned but not yet tested
 
 ## What You Need
 
@@ -24,10 +24,10 @@ SYS → Tools → ELRS → wait → VTX Admin → Band → Channel → Power →
 |-------------|---------|
 | **Radio firmware** | EdgeTX 2.11 or newer |
 | **TX module** | Any ELRS module (internal or external) |
-| **VTX** | Any VTX that supports SmartAudio or Tramp (CRSF VTX control) |
-| **Receiver** | ELRS receiver connected to the VTX via SmartAudio/Tramp |
+| **VTX** | Any VTX with SmartAudio, Tramp, or HDZero (DisplayPort) |
+| **Receiver** | ELRS receiver connected to the VTX |
 
-> **Note:** Your VTX must be wired to the receiver's SmartAudio/Tramp output, and VTX Admin must be enabled in ELRS. If you can already change VTX settings through ELRS Lua → VTX Administrator, you're good to go.
+> **How do I know if my setup is compatible?** If you can change VTX channel/power from your goggles OSD (Betaflight OSD → VTX settings), SmartAudio/Tramp is already working. EasyVTXch uses the same connection — just controlled from your radio instead of the OSD.
 
 ## Installation
 
@@ -44,7 +44,6 @@ SYS → Tools → ELRS → wait → VTX Admin → Band → Channel → Power →
 
 - **USB:** Connect your radio via USB, choose "USB Storage" mode, and copy the file
 - **SD card reader:** Remove the SD card, use a card reader on your computer
-- **EdgeTX Companion:** Use the SD card sync feature
 
 ### Updating
 
@@ -52,7 +51,7 @@ To update, just overwrite the `.lua` file with the new version. If the script do
 
 ## How to Use
 
-### Color LCD Radios (TX16S, TX18S, Boxer, etc.)
+### Color LCD Radios (TX16S, TX15, etc.)
 
 | Action | What it does |
 |--------|-------------|
@@ -62,7 +61,9 @@ To update, just overwrite the `.lua` file with the new version. If the script do
 
 Favorite channels appear in a quick-access grid at the top of the screen.
 
-### B&W LCD Radios (Zorro, TX12, etc.)
+### B&W LCD Radios (Boxer, Zorro, TX12, etc.)
+
+> **Note:** B&W LCD support is included but not yet tested on real hardware.
 
 | Action | What it does |
 |--------|-------------|
@@ -82,7 +83,7 @@ Favorites are marked with a `*` and shown at the top of the list.
 | "VTX fields incomplete" | Your ELRS firmware may be too old. Update to ELRS 3.x or newer. |
 | Script doesn't appear in Tools | Make sure the file is named `EasyVTXch.lua` (case-sensitive) and is in `/SCRIPTS/TOOLS/`. |
 | Script doesn't update after replacing file | Delete `EasyVTXch.luac` from the same folder. EdgeTX caches compiled scripts. |
-| Channel changes but VTX doesn't respond | Check the SmartAudio/Tramp wiring between your receiver and VTX. Also verify your VTX supports the protocol. |
+| Channel changes but VTX doesn't respond | Check the wiring between your receiver and VTX (SmartAudio, Tramp, or DisplayPort). Also verify your VTX supports the protocol. |
 
 ## Supported Frequencies
 
