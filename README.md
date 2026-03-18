@@ -33,7 +33,7 @@ SYS → Tools → ELRS → wait → VTX Admin → Band → Channel → Power →
 
 **Just one file — no dependencies, no configuration.**
 
-1. Download [`EasyVTXch.lua`](https://raw.githubusercontent.com/Saqoosha/EasyVTXch/main/EasyVTXch.lua)
+1. Download [`EasyVTXch.lua`](https://github.com/Saqoosha/EasyVTXch/releases/latest/download/EasyVTXch.lua) from the [Releases page](https://github.com/Saqoosha/EasyVTXch/releases)
 2. Copy it to your radio's SD card at:
    ```
    /SCRIPTS/TOOLS/EasyVTXch.lua
