@@ -610,6 +610,10 @@ local function isReady()
   return crsf.state == State.READY
 end
 
+local function isConnected()
+  return crsf.state >= State.READY
+end
+
 local ui = {
   bandBtns = {},  -- { [bandName] = btn }
 }
@@ -653,7 +657,7 @@ local function buildUi()
       x = 0, y = y, w = 460,
       flexFlow = lvgl.FLOW_COLUMN,
       flexPad = lvgl.PAD_TINY,
-      visible = isReady,
+      visible = isConnected,
     })
     for rowStart = 1, #favorites, 4 do
       local row = favBox:box({ flexFlow = lvgl.FLOW_ROW, flexPad = lvgl.PAD_SMALL })
@@ -681,7 +685,7 @@ local function buildUi()
     x = 0, y = y, w = 460, h = 32,
     flexFlow = lvgl.FLOW_ROW,
     flexPad = lvgl.PAD_SMALL,
-    visible = isReady,
+    visible = isConnected,
   })
   for _, bname in ipairs(BAND_NAMES) do
     local b = bname
@@ -704,7 +708,7 @@ local function buildUi()
     x = 0, y = y, w = 472,
     flexFlow = lvgl.FLOW_COLUMN,
     flexPad = lvgl.PAD_SMALL,
-    visible = isReady,
+    visible = isConnected,
   })
 
   local function makeRow(parent, startCh, endCh)
