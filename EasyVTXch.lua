@@ -98,6 +98,14 @@ local bwItemsDirty = true  -- invalidate B&W item cache
 
 ---- [3] Favorites Persistence ----
 
+local function sortFavorites()
+  table.sort(favorites, function(a, b)
+    local fa = FREQ[a.band]
+    local fb = FREQ[b.band]
+    return (fa and fa[a.channel] or 0) < (fb and fb[b.channel] or 0)
+  end)
+end
+
 local function rebuildFavLookup()
   favLookup = {}
   for _, fav in ipairs(favorites) do
@@ -131,6 +139,7 @@ local function loadFavorites()
       end
     end
   end
+  sortFavorites()
   rebuildFavLookup()
 end
 
@@ -164,6 +173,7 @@ local function toggleFavorite(band, ch)
     favorites[#favorites + 1] = { band = band, channel = ch }
     wasAdded = true
   end
+  sortFavorites()
   rebuildFavLookup()
   bwItemsDirty = true
   saveFavorites()
