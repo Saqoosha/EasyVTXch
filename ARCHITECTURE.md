@@ -11,6 +11,7 @@ EasyVTXch.lua
 ├── [1] Constants          — CRSF addresses, frame types, field types, bands, frequencies
 ├── [2] State              — CRSF state machine, pending writes, UI state
 ├── [3] Favorites          — Load/save favorites + selected band to .fav file
+├── [3.5] Field ID Cache   — Cache/restore discovered CRSF field IDs for fast startup
 ├── [4] CRSF Communication — Ping, field enumeration, field parsing, nil-safe wrappers
 ├── [5] VTX Commander      — Sequential band→channel→send→confirm write sequence
 ├── [6] CRSF Processing    — Main loop: pop messages, handle timeouts
@@ -88,20 +89,35 @@ Parsed with: `string.match(dynName, "%((%a):(%d+)")`
 
 ```
 IDLE → PINGING → ENUMERATING → READY ⇄ SENDING
-                                  ↓
-                                ERROR
+                     ↑            ↓
+              (cache fallback)  ERROR
 ```
 
 ### PINGING
 - Send `CMD_PING` with `{0x00, CRSF_ADDR_RADIO}`
 - Wait for `CMD_DEVICE_INFO` response
-- Timeout: 3s, retry up to 5 times → ERROR "TX module not found"
+- Timeout: 200ms, retry up to 10 times (total 2s) → ERROR "TX module not found"
 
 ### ENUMERATING
+Two modes: **cached** (fast) and **full** (fallback).
+
+#### Cached Enumeration (2nd+ launch)
+- On `CMD_DEVICE_INFO`, check if `easyvtxch.cache` exists and `fieldCount` matches
+- Set `crsf.vtxFolderId` from cache, but leave `bandFieldId`/`channelFieldId`/`sendFieldId` as nil
+- Request only the 4 cached field IDs (VTX folder → band → channel → send)
+- VTX folder is verified by name (`TYPE_FOLDER` + contains "VTX")
+- Band/channel/send are verified by **early detection** in `parseFieldData` (name + parent match)
+- `allVtxFieldsFound()` only returns true if early detection independently confirmed all 4 fields
+- If any verification fails → `startFullEnumeration()` fallback
+- If cached field times out → `startFullEnumeration()` fallback (no infinite retry)
+
+#### Full Enumeration (1st launch or cache miss)
 - Request each field via `CMD_PARAM_READ` with `{deviceId, handsetId, fieldId, chunkIndex}`
 - Accumulate chunked responses in `crsf.chunkBuf`
 - Parse field data and store in `crsf.fields[fieldId]`
-- After all fields: find VTX Admin folder and children **by name** (field IDs are dynamic!)
+- **Early termination**: each field is checked as it arrives via early detection in `parseFieldData`; once all 4 VTX fields are found, skip remaining fields
+- If all fields enumerated without finding VTX fields: `findVtxFields()` scans stored fields **by name** (field IDs are dynamic!)
+- On success, save discovered field IDs to `easyvtxch.cache` for next launch
 
 ### READY
 - UI is interactive, channel/fav/band buttons enabled
@@ -134,18 +150,20 @@ During the SENDING sequence, incoming `CMD_PARAM_RESP` messages are validated: t
 ```
 page (title="EasyVTXch", subtitle=dynamic currentText)
 ├── label (statusText, dynamic)
-├── favBox (FLOW_COLUMN, only if favorites exist)
+├── favBox (FLOW_COLUMN, visible=isReady, only if favorites exist)
 │   └── row(s) (FLOW_ROW, 4 buttons per row)
 │       └── button × N (static text, active=isReady)
-├── bandBox (FLOW_ROW)
+├── bandBox (FLOW_ROW, visible=isReady)
 │   └── button × 5 (A/B/E/F/R, checked=selected, active=isReady)
-├── chanBox (FLOW_COLUMN)
+├── chanBox (FLOW_COLUMN, visible=isReady)
 │   ├── row1 (FLOW_ROW)
 │   │   └── button × 4 (ch 1-4, static text, checked=isFavorite, active=isReady)
 │   └── row2 (FLOW_ROW)
 │       └── button × 4 (ch 5-8, static text, checked=isFavorite, active=isReady)
 └── retryButton (visible when ERROR state)
 ```
+
+All interactive elements (favorites, band selector, channel grid) are hidden until the CRSF connection is established (`visible = isReady`). Only the status label and retry button are visible during connection.
 
 ### Rebuild Strategy
 The UI uses a **full rebuild** approach via `dirtyAll` flag:
@@ -164,6 +182,9 @@ The UI uses a **full rebuild** approach via `dirtyAll` flag:
 **Tradeoff:** Focus resets to first element on rebuild. Focus control is not available in EdgeTX Lua API.
 
 ### Performance Optimizations
+- **Field ID caching**: Saves discovered VTX field IDs to `easyvtxch.cache`. On subsequent launches, only 4 fields are read and verified instead of enumerating all 30+ fields. Reduces startup from ~5s to <1s
+- **Early termination**: During full enumeration, stops as soon as all 4 VTX fields are found (via inline detection in `parseFieldData`) instead of loading every field
+- **Aggressive ping retry**: 200ms interval with 10 retries vs original 3s × 5. Faster connection to responsive modules
 - **`favLookup`**: Hash table `{ ["R1"]=true, ... }` rebuilt on favorite change for O(1) `isFavorite()` lookups
 - **`bandDirty`**: Defers `saveFavorites()` to script exit instead of saving on every band switch (reduces flash wear)
 - **`bwItemsDirty`**: Caches B&W mode item list, invalidated only on band switch or favorite toggle (avoids per-frame allocation)
@@ -191,6 +212,21 @@ Required because simulator may not have CRSF functions defined.
 ### String Method Safety
 EdgeTX Lua does NOT reliably support string metatable methods (`:find()`, `:lower()`, etc.).
 Always use explicit library calls: `string.find(s, pattern)`, `string.lower(s)`, etc.
+
+## Field ID Cache File Format
+
+Path: `/SCRIPTS/TOOLS/easyvtxch.cache`
+
+```
+9,10,11,12,33
+```
+
+Format: `vtxFolderId,bandFieldId,channelFieldId,sendFieldId,fieldCount` (strict CSV, parsed with `string.match("^(%d+),(%d+),(%d+),(%d+),(%d+)")` to reject corrupt files).
+
+- Written after successful field discovery (either cached or full enumeration)
+- `fieldCount` must match the device's reported count for the cache to be used
+- Only `vtxFolderId` is trusted from cache; band/channel/send are re-verified via early detection
+- Corrupt or truncated files are safely rejected by the strict format check
 
 ## Favorites File Format
 
@@ -227,10 +263,12 @@ ELRS TEXT_SELECTION options: `"Off;A;B;E;F;R"`
 
 | Constant | Value | Description |
 |----------|-------|-------------|
-| `TIMEOUT_PING` | 300 (3s) | Wait for device info |
+| `TIMEOUT_PING` | 20 (200ms) | Wait for device info per retry |
 | `TIMEOUT_ENUM` | 100 (1s) | Wait per field response |
 | `TIMEOUT_WRITE` | 15 (150ms) | Between band/channel writes |
 | `TIMEOUT_SEND` | 20 (200ms) | For send command + confirm |
-| `RETRY_MAX` | 5 | Max ping retries |
+| `RETRY_MAX` | 10 | Max ping retries (total 2s) |
 
 `getTime()` returns 10ms ticks.
+
+During cache verification, if a field times out (`TIMEOUT_ENUM`), the script abandons the cache and falls back to full enumeration via `startFullEnumeration()` instead of retrying the same field.

@@ -8,6 +8,10 @@ Single-file EdgeTX Lua script (`EasyVTXch.lua`) for simplified VTX channel chang
 - `test_mock.lua` — desktop Lua 5.4 mock tests for B&W mode and CRSF protocol
 - `ARCHITECTURE.md` — internal architecture and protocol details
 
+## Runtime Files (on SD card)
+- `/SCRIPTS/TOOLS/easyvtxch.fav` — favorites + last selected band
+- `/SCRIPTS/TOOLS/easyvtxch.cache` — cached CRSF field IDs for fast startup
+
 ## Coding Rules
 
 ### Lua Style
@@ -31,6 +35,7 @@ Single-file EdgeTX Lua script (`EasyVTXch.lua`) for simplified VTX channel chang
 
 ### CRSF Protocol
 - Field IDs are **dynamic** per firmware version — always discover by name, never hardcode
+- **Field ID caching**: `easyvtxch.cache` stores discovered field IDs for fast startup. On cache hit, only the VTX folder ID is trusted; band/channel/send must be independently re-verified by early detection in `parseFieldData`. Never pre-set band/channel/send from cache — let `allVtxFieldsFound()` confirm them
 - Use `crossfireTelemetryPush`/`Pop` with nil-check wrappers (`crsfPush`/`crsfPop`)
 - Handle `crossfireTelemetryPop` returning `false` (not just `nil`) — use `not cmd` instead of `cmd == nil`
 - **Channel values are 1-based** in ELRS CRSF (`min=1, max=8`). Use `field.min + (uiChannel - 1)` to convert from UI (1-8). The firmware internally converts to 0-based via `SetVtxChannel(arg - 1)`. Never hardcode the offset — use the `min` from CRSF enumeration

@@ -42,11 +42,13 @@ local FREQ = {
 
 local FAV_PATH = "/SCRIPTS/TOOLS/easyvtxch.fav"
 
-local TIMEOUT_PING = 300   -- 300 * 10ms = 3s
+local TIMEOUT_PING = 20    -- 20 * 10ms = 200ms per retry (total 2s with 10 retries)
 local TIMEOUT_ENUM = 100   -- 100 * 10ms = 1s per field
 local TIMEOUT_WRITE = 15   -- 15 * 10ms = 150ms between writes
 local TIMEOUT_SEND  = 20   -- 20 * 10ms = 200ms for send command
-local RETRY_MAX = 5
+local RETRY_MAX = 10
+
+local FIELD_CACHE_PATH = "/SCRIPTS/TOOLS/easyvtxch.cache"
 
 ---- [2] State ----
 
@@ -76,6 +78,7 @@ local crsf = {
   bandFieldId    = nil,
   channelFieldId = nil,
   sendFieldId    = nil,
+  verifyCache    = nil,  -- set during cache verification
 
   currentBand    = nil,
   currentChannel = nil,
@@ -167,6 +170,37 @@ local function toggleFavorite(band, ch)
   return wasAdded
 end
 
+---- [3.5] Field ID Cache ----
+
+local function saveFieldCache()
+  if not (crsf.vtxFolderId and crsf.bandFieldId and crsf.channelFieldId and crsf.sendFieldId) then
+    return
+  end
+  local f = io.open(FIELD_CACHE_PATH, "w")
+  if not f then return end
+  io.write(f, tostring(crsf.vtxFolderId) .. ","
+    .. tostring(crsf.bandFieldId) .. ","
+    .. tostring(crsf.channelFieldId) .. ","
+    .. tostring(crsf.sendFieldId) .. ","
+    .. tostring(crsf.fieldCount) .. "\n")
+  io.close(f)
+end
+
+local function loadFieldCache()
+  local f = io.open(FIELD_CACHE_PATH, "r")
+  if not f then return nil end
+  local buf = io.read(f, 128) or ""
+  io.close(f)
+  -- Require exactly "num,num,num,num,num" format to reject corrupt files
+  local v1, v2, v3, v4, v5 = string.match(buf, "^(%d+),(%d+),(%d+),(%d+),(%d+)")
+  if not v1 then return nil end
+  return {
+    vtx = tonumber(v1), band = tonumber(v2),
+    channel = tonumber(v3), send = tonumber(v4),
+    count = tonumber(v5),
+  }
+end
+
 ---- [4] CRSF Communication ----
 
 local findVtxFields
@@ -219,7 +253,73 @@ local function requestField(fieldId)
   crsf.timer = getTime()
 end
 
+local function allVtxFieldsFound()
+  return crsf.vtxFolderId and crsf.bandFieldId and crsf.channelFieldId and crsf.sendFieldId
+end
+
+local function startFullEnumeration()
+  statusText = "Loading fields..."
+  crsf.vtxFolderId = nil
+  crsf.bandFieldId = nil
+  crsf.channelFieldId = nil
+  crsf.sendFieldId = nil
+  crsf.verifyCache = nil
+  crsf.currentBand = nil
+  crsf.currentChannel = nil
+  crsf.loadIdx = 0
+  crsf.fields = {}
+  requestField(1)
+end
+
 local function requestNextField()
+  -- Cache verification mode: read cached field IDs one by one
+  if crsf.verifyCache then
+    local cache = crsf.verifyCache
+    local f = crsf.fields[cache.vtx]
+    if f then
+      -- VTX folder loaded — verify it's actually a VTX folder
+      if not (f.type == TYPE_FOLDER and type(f.name) == "string" and string.find(f.name, "VTX")) then
+        -- Cache invalid, fall back to full enumeration
+        startFullEnumeration()
+        return
+      end
+      -- VTX folder verified, now load child fields if not yet loaded
+      if not crsf.fields[cache.band] then
+        requestField(cache.band)
+        return
+      end
+      if not crsf.fields[cache.channel] then
+        requestField(cache.channel)
+        return
+      end
+      if not crsf.fields[cache.send] then
+        requestField(cache.send)
+        return
+      end
+      -- All cached fields loaded and VTX fields matched by early detection
+      if allVtxFieldsFound() then
+        crsf.verifyCache = nil
+        crsf.state = State.READY
+        statusText = "Ready"
+        refreshUi()
+        return
+      end
+      -- Fields loaded but didn't match — cache stale
+      startFullEnumeration()
+      return
+    end
+    -- VTX folder not yet loaded, keep waiting (requestField already called)
+    return
+  end
+
+  -- Early termination: all VTX fields found, skip remaining
+  if allVtxFieldsFound() then
+    saveFieldCache()
+    crsf.state = State.READY
+    statusText = "Ready"
+    refreshUi()
+    return
+  end
   if crsf.loadIdx >= crsf.fieldCount then
     findVtxFields()
     return
@@ -243,6 +343,22 @@ local function parseDeviceInfo(data)
   if crsf.fieldCount == 0 then
     statusText = "No fields found"
     crsf.state = State.ERROR
+    return
+  end
+
+  -- Try cached field IDs first (skip full enumeration)
+  local cache = loadFieldCache()
+  if cache and cache.count == crsf.fieldCount then
+    -- Only set vtxFolderId for folder verification;
+    -- band/channel/send stay nil — early detection in parseFieldData must confirm them
+    crsf.vtxFolderId = cache.vtx
+    crsf.bandFieldId = nil
+    crsf.channelFieldId = nil
+    crsf.sendFieldId = nil
+    crsf.state = State.ENUMERATING
+    crsf.fields = {}
+    crsf.verifyCache = cache
+    requestField(cache.vtx)
     return
   end
 
@@ -285,6 +401,29 @@ local function parseFieldData(fieldId, d)
   end
 
   crsf.fields[fieldId] = field
+
+  -- Early detection: check if this field is VTX-related
+  if type(field.name) == "string" then
+    if field.type == TYPE_FOLDER and string.find(field.name, "VTX") then
+      crsf.vtxFolderId = fieldId
+      if type(field.dynName) == "string" then
+        local b, c = string.match(field.dynName, "%((%a):(%d+)")
+        if b and c then
+          crsf.currentBand = b
+          crsf.currentChannel = tonumber(c)
+        end
+      end
+    elseif crsf.vtxFolderId and field.parent == crsf.vtxFolderId then
+      local n = string.lower(field.name)
+      if n == "band" then
+        crsf.bandFieldId = fieldId
+      elseif n == "channel" then
+        crsf.channelFieldId = fieldId
+      elseif string.find(n, "send") then
+        crsf.sendFieldId = fieldId
+      end
+    end
+  end
 end
 
 local function parseParamInfo(data)
@@ -353,6 +492,7 @@ findVtxFields = function()
     return
   end
 
+  saveFieldCache()
   crsf.state = State.READY
   statusText = "Ready"
   refreshUi()
@@ -450,7 +590,12 @@ local function processCrsf()
       crsf.state = State.ERROR
     end
   elseif crsf.state == State.ENUMERATING and elapsed > TIMEOUT_ENUM then
-    requestField(crsf.loadIdx)
+    if crsf.verifyCache then
+      -- Cache verification field not responding — abandon cache
+      startFullEnumeration()
+    else
+      requestField(crsf.loadIdx)
+    end
   elseif crsf.state >= State.WRITING_BAND and crsf.state <= State.CONFIRMING then
     local timeout = (crsf.state <= State.WRITING_CHAN) and TIMEOUT_WRITE or TIMEOUT_SEND
     if elapsed > timeout then
@@ -508,6 +653,7 @@ local function buildUi()
       x = 0, y = y, w = 460,
       flexFlow = lvgl.FLOW_COLUMN,
       flexPad = lvgl.PAD_TINY,
+      visible = isReady,
     })
     for rowStart = 1, #favorites, 4 do
       local row = favBox:box({ flexFlow = lvgl.FLOW_ROW, flexPad = lvgl.PAD_SMALL })
@@ -535,6 +681,7 @@ local function buildUi()
     x = 0, y = y, w = 460, h = 32,
     flexFlow = lvgl.FLOW_ROW,
     flexPad = lvgl.PAD_SMALL,
+    visible = isReady,
   })
   for _, bname in ipairs(BAND_NAMES) do
     local b = bname
@@ -557,6 +704,7 @@ local function buildUi()
     x = 0, y = y, w = 472,
     flexFlow = lvgl.FLOW_COLUMN,
     flexPad = lvgl.PAD_SMALL,
+    visible = isReady,
   })
 
   local function makeRow(parent, startCh, endCh)
