@@ -53,6 +53,14 @@ To update, just overwrite the `.lua` file with the new version. If the script do
 
 ## How to Use
 
+### Step by Step
+
+1. **Power on your transmitter** and wait for EdgeTX to boot
+2. **Plug in the battery** to your drone (or power on your VTX)
+3. **Confirm binding** — make sure your TX module and receiver are bound and connected
+4. **SYS → Tools → EasyVTXch** — launch the script
+5. **Tap the channel** you want — done!
+
 ### Color LCD Radios (TX16S, TX15, etc.)
 
 | Action | What it does |
