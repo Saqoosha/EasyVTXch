@@ -9,6 +9,8 @@ SYS → Tools → ELRS → wait → VTX Admin → Band → Channel → Power →
 
 **EasyVTXch does it in 2 steps:** launch the script → tap the channel. Done.
 
+![EasyVTXch on RadioMaster TX15](screenshot.jpg)
+
 ## Features
 
 - **One-tap switching** — tap a channel button and the VTX command is sent instantly
