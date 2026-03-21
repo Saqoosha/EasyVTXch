@@ -616,6 +616,25 @@ end
 
 ---- [7] LVGL UI ----
 
+-- Screen-adaptive layout (TX16S: 480x272, TX16S MK3: 800x480, etc.)
+local SW = LCD_W or 480
+local SH = LCD_H or 272
+local PAD = 4  -- approximate lvgl.PAD_SMALL
+
+local contentW = SW - 20
+local colCount = 4
+local favBtnW = math.floor((contentW - PAD * (colCount - 1)) / colCount)
+local favBtnH = math.max(28, math.floor(SH * 0.103))
+local bandBtnW = math.floor((contentW - PAD * 4) / 5)
+local bandBtnH = favBtnH
+local chanBtnW = favBtnW
+local chanBtnH = math.max(50, math.floor(SH * 0.184))
+local statusH = math.max(18, math.floor(SH * 0.066))
+local favRowH = favBtnH + PAD
+local bandRowH = bandBtnH + 8
+local retryBtnW = math.floor(contentW * 0.4)
+local retryBtnX = math.floor((contentW - retryBtnW) / 2)
+
 local function isReady()
   return crsf.state == State.READY
 end
@@ -659,22 +678,22 @@ local function buildUi()
     font = SMLSIZE,
     color = COLOR_THEME_PRIMARY1,
   })
-  y = y + 18
+  y = y + statusH
 
   -- Favorites grid (4 columns per row, multiple rows)
   if #favorites > 0 then
     local favBox = page:box({
-      x = 0, y = y, w = 460,
+      x = 0, y = y, w = contentW,
       flexFlow = lvgl.FLOW_COLUMN,
       flexPad = lvgl.PAD_TINY,
       visible = isConnected,
     })
-    for rowStart = 1, #favorites, 4 do
+    for rowStart = 1, #favorites, colCount do
       local row = favBox:box({ flexFlow = lvgl.FLOW_ROW, flexPad = lvgl.PAD_SMALL })
-      for i = rowStart, math.min(rowStart + 3, #favorites) do
+      for i = rowStart, math.min(rowStart + colCount - 1, #favorites) do
         local fb, fc = favorites[i].band, favorites[i].channel
         row:button({
-          w = 108, h = 28,
+          w = favBtnW, h = favBtnH,
           text = fb .. fc .. " " .. getFreq(fb, fc),
           font = SMLSIZE,
           active = isReady,
@@ -686,13 +705,13 @@ local function buildUi()
         })
       end
     end
-    local favRows = math.ceil(#favorites / 4)
-    y = y + favRows * 32 + 12
+    local favRows = math.ceil(#favorites / colCount)
+    y = y + favRows * favRowH + 12
   end
 
   -- Band selector
   local bandBox = page:box({
-    x = 0, y = y, w = 460, h = 32,
+    x = 0, y = y, w = contentW, h = bandBtnH + PAD,
     flexFlow = lvgl.FLOW_ROW,
     flexPad = lvgl.PAD_SMALL,
     visible = isConnected,
@@ -700,7 +719,7 @@ local function buildUi()
   for _, bname in ipairs(BAND_NAMES) do
     local b = bname
     local btn = bandBox:button({
-      w = 60, h = 28,
+      w = bandBtnW, h = bandBtnH,
       text = b,
       checked = (selectedBand == b),
       active = isReady,
@@ -711,11 +730,11 @@ local function buildUi()
     })
     ui.bandBtns[b] = btn
   end
-  y = y + 36
+  y = y + bandRowH
 
   -- Channel grid (2 rows x 4 cols)
   local chanBox = page:box({
-    x = 0, y = y, w = 472,
+    x = 0, y = y, w = contentW,
     flexFlow = lvgl.FLOW_COLUMN,
     flexPad = lvgl.PAD_SMALL,
     visible = isConnected,
@@ -726,7 +745,7 @@ local function buildUi()
     for ch = startCh, endCh do
       local c = ch
       row:button({
-        w = 108, h = 50,
+        w = chanBtnW, h = chanBtnH,
         text = selectedBand .. c .. "\n" .. getFreq(selectedBand, c),
         checked = isFavorite(selectedBand, c),
         active = isReady,
@@ -744,7 +763,7 @@ local function buildUi()
 
   -- Retry button
   page:button({
-    x = 140, y = y + 120, w = 180,
+    x = retryBtnX, y = y + chanBtnH * 2 + 20, w = retryBtnW,
     text = "Retry Connection",
     visible = function() return crsf.state == State.ERROR end,
     press = function()
