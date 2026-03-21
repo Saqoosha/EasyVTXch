@@ -619,21 +619,17 @@ end
 -- Screen-adaptive layout (TX16S: 480x272, TX16S MK3: 800x480, etc.)
 local SW = LCD_W or 480
 local SH = LCD_H or 272
-local PAD = 4  -- approximate lvgl.PAD_SMALL
+local PAD = 4  -- lvgl.PAD_SMALL = 4px
+local MARGIN = 6  -- padding around UI edges
+local contentW = SW - MARGIN * 2
 
-local contentW = SW - 20
 local colCount = 4
 local favBtnW = math.floor((contentW - PAD * (colCount - 1)) / colCount)
-local favBtnH = math.max(28, math.floor(SH * 0.103))
+local favBtnH = math.max(50, math.floor(SH * 0.184))
 local bandBtnW = math.floor((contentW - PAD * 4) / 5)
-local bandBtnH = favBtnH
+local bandBtnH = math.max(28, math.floor(SH * 0.103))
 local chanBtnW = favBtnW
-local chanBtnH = math.max(50, math.floor(SH * 0.184))
-local statusH = math.max(18, math.floor(SH * 0.066))
-local favRowH = favBtnH + PAD
-local bandRowH = bandBtnH + 8
-local retryBtnW = math.floor(contentW * 0.4)
-local retryBtnX = math.floor((contentW - retryBtnW) / 2)
+local chanBtnH = favBtnH
 
 local function isReady()
   return crsf.state == State.READY
@@ -661,41 +657,31 @@ local function buildUi()
   lvgl.clear()
   ui.bandBtns = {}
 
+  local sub = getCurrentText()
+  if sub == "" then sub = statusText end
+
+  -- No flex on page: body has 0 padding, width = LCD_W
   local page = lvgl.page({
     title = "EasyVTXch",
-    subtitle = getCurrentText,
+    subtitle = sub,
     back = function()
       exitScript = true
     end,
   })
 
-  local y = 0
+  local y = MARGIN
 
-  -- Status bar
-  page:label({
-    x = 4, y = y,
-    text = function() return statusText end,
-    font = SMLSIZE,
-    color = COLOR_THEME_PRIMARY1,
-  })
-  y = y + statusH
-
-  -- Favorites grid (4 columns per row, multiple rows)
+  -- Favorites grid (absolute positioning, no flex nesting)
   if #favorites > 0 then
-    local favBox = page:box({
-      x = 0, y = y, w = contentW,
-      flexFlow = lvgl.FLOW_COLUMN,
-      flexPad = lvgl.PAD_TINY,
-      visible = isConnected,
-    })
     for rowStart = 1, #favorites, colCount do
-      local row = favBox:box({ flexFlow = lvgl.FLOW_ROW, flexPad = lvgl.PAD_SMALL })
       for i = rowStart, math.min(rowStart + colCount - 1, #favorites) do
+        local col = i - rowStart
         local fb, fc = favorites[i].band, favorites[i].channel
-        row:button({
+        page:button({
+          x = MARGIN + col * (favBtnW + PAD), y = y,
           w = favBtnW, h = favBtnH,
           text = fb .. fc .. " " .. getFreq(fb, fc),
-          font = SMLSIZE,
+          visible = isConnected,
           active = isReady,
           press = function() sendChannel(fb, fc) end,
           longpress = function()
@@ -704,24 +690,20 @@ local function buildUi()
           end,
         })
       end
+      y = y + favBtnH + PAD
     end
-    local favRows = math.ceil(#favorites / colCount)
-    y = y + favRows * favRowH + 12
+    y = y + PAD
   end
 
   -- Band selector
-  local bandBox = page:box({
-    x = 0, y = y, w = contentW, h = bandBtnH + PAD,
-    flexFlow = lvgl.FLOW_ROW,
-    flexPad = lvgl.PAD_SMALL,
-    visible = isConnected,
-  })
-  for _, bname in ipairs(BAND_NAMES) do
+  for bi, bname in ipairs(BAND_NAMES) do
     local b = bname
-    local btn = bandBox:button({
+    local btn = page:button({
+      x = MARGIN + (bi - 1) * (bandBtnW + PAD), y = y,
       w = bandBtnW, h = bandBtnH,
       text = b,
       checked = (selectedBand == b),
+      visible = isConnected,
       active = isReady,
       press = function()
         selectedBand = b
@@ -730,40 +712,36 @@ local function buildUi()
     })
     ui.bandBtns[b] = btn
   end
-  y = y + bandRowH
+  y = y + bandBtnH + PAD * 2
 
   -- Channel grid (2 rows x 4 cols)
-  local chanBox = page:box({
-    x = 0, y = y, w = contentW,
-    flexFlow = lvgl.FLOW_COLUMN,
-    flexPad = lvgl.PAD_SMALL,
-    visible = isConnected,
-  })
-
-  local function makeRow(parent, startCh, endCh)
-    local row = parent:box({ flexFlow = lvgl.FLOW_ROW, flexPad = lvgl.PAD_SMALL })
-    for ch = startCh, endCh do
-      local c = ch
-      row:button({
-        w = chanBtnW, h = chanBtnH,
-        text = selectedBand .. c .. "\n" .. getFreq(selectedBand, c),
-        checked = isFavorite(selectedBand, c),
-        active = isReady,
-        press = function() sendChannel(selectedBand, c) end,
-        longpress = function()
-          toggleFavorite(selectedBand, c)
-          dirtyAll = true
-        end,
-      })
-    end
+  for ch = 1, 8 do
+    local c = ch
+    local col = (c - 1) % 4
+    local row = math.floor((c - 1) / 4)
+    page:button({
+      x = MARGIN + col * (chanBtnW + PAD), y = y + row * (chanBtnH + PAD),
+      w = chanBtnW, h = chanBtnH,
+      text = selectedBand .. c .. "\n" .. getFreq(selectedBand, c),
+      checked = isFavorite(selectedBand, c),
+      visible = isConnected,
+      active = isReady,
+      press = function() sendChannel(selectedBand, c) end,
+      longpress = function()
+        toggleFavorite(selectedBand, c)
+        dirtyAll = true
+      end,
+    })
   end
 
-  makeRow(chanBox, 1, 4)
-  makeRow(chanBox, 5, 8)
+  local bottomY = y + (chanBtnH + PAD) * 2
 
   -- Retry button
+  local retryW = math.floor(contentW * 0.4)
   page:button({
-    x = retryBtnX, y = y + chanBtnH * 2 + 20, w = retryBtnW,
+    x = MARGIN + math.floor((contentW - retryW) / 2),
+    y = bottomY + PAD,
+    w = retryW,
     text = "Retry Connection",
     visible = function() return crsf.state == State.ERROR end,
     press = function()
@@ -771,6 +749,9 @@ local function buildUi()
       sendPing()
     end,
   })
+
+  -- Bottom spacer (extends scrollable area for bottom margin)
+  page:label({ x = 0, y = bottomY + MARGIN, h = 1, text = "" })
 end
 
 ---- [8] B&W Fallback (128x64) ----
