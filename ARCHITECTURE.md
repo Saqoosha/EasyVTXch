@@ -15,7 +15,7 @@ EasyVTXch.lua
 ├── [4] CRSF Communication — Ping, field enumeration, field parsing, nil-safe wrappers
 ├── [5] VTX Commander      — Sequential band→channel→send→confirm write sequence
 ├── [6] CRSF Processing    — Main loop: pop messages, handle timeouts
-├── [7] LVGL UI            — Color LCD widget tree (480×272)
+├── [7] LVGL UI            — Color LCD widget tree (480×272 / 480×320)
 ├── [8] B&W Fallback       — Monochrome LCD list UI (128×64)
 └── [9] init / run         — Entry points returned to EdgeTX
 ```
@@ -148,22 +148,17 @@ During the SENDING sequence, incoming `CMD_PARAM_RESP` messages are validated: t
 
 ### Widget Tree
 ```
-page (title="EasyVTXch", subtitle=dynamic currentText)
-├── label (statusText, dynamic)
-├── favBox (FLOW_COLUMN, visible=isReady, only if favorites exist)
-│   └── row(s) (FLOW_ROW, 4 buttons per row)
-│       └── button × N (static text, active=isReady)
-├── bandBox (FLOW_ROW, visible=isReady)
-│   └── button × 5 (A/B/E/F/R, checked=selected, active=isReady)
-├── chanBox (FLOW_COLUMN, visible=isReady)
-│   ├── row1 (FLOW_ROW)
-│   │   └── button × 4 (ch 1-4, static text, checked=isFavorite, active=isReady)
-│   └── row2 (FLOW_ROW)
-│       └── button × 4 (ch 5-8, static text, checked=isFavorite, active=isReady)
-└── retryButton (visible when ERROR state)
+page (title="EasyVTXch", subtitle=statusText or currentFreq)
+├── favorite buttons × N (absolute positioned, 4 per row, visible=isConnected)
+├── band buttons × 5 (A/B/E/F/R, absolute positioned, checked=selected, visible=isConnected)
+├── channel buttons × 8 (2 rows × 4, absolute positioned, checked=isFavorite, visible=isConnected)
+├── retryButton (visible when ERROR state)
+└── spacer label (h=1, extends scrollable area for bottom margin)
 ```
 
-All interactive elements (favorites, band selector, channel grid) are hidden until the CRSF connection is established (`visible = isReady`). Only the status label and retry button are visible during connection.
+All buttons are placed directly on the page using absolute `x, y` positioning (no flex containers). This avoids nested padding issues where each flex level adds 2px `PAD_OUTLINE`. Status text is shown in the page subtitle (merged with current freq display).
+
+All interactive elements are hidden until the CRSF connection is established (`visible = isConnected`). Only the retry button is visible during error state.
 
 ### Rebuild Strategy
 The UI uses a **full rebuild** approach via `dirtyAll` flag:
@@ -171,7 +166,7 @@ The UI uses a **full rebuild** approach via `dirtyAll` flag:
 1. Band switch or favorite toggle sets `dirtyAll = true`
 2. In `run()`, if `dirtyAll`: call `lvgl.clear()` then `buildUi()`
 3. All widget properties (`checked`, `text`) are computed fresh at build time
-4. Dynamic text functions (`text = function()`) used only for continuously changing values (statusText, subtitle via `getCurrentText()`)
+4. Subtitle is set to static string at build time (status text or current freq)
 
 **Why not partial updates:**
 - `box:clear()` doesn't work in EdgeTX LVGL

@@ -22,7 +22,8 @@ Single-file EdgeTX Lua script (`EasyVTXch.lua`) for simplified VTX channel chang
 
 ### EdgeTX LVGL Rules (Critical)
 - **NEVER use `box:clear()` + rebuild** — it doesn't work in EdgeTX LVGL
-- **Use `text = function() return val end`** for dynamic text that changes every frame (status, subtitle)
+- **Use `text = function() return val end`** for dynamic text on labels (auto-updates every frame)
+- **`page()` subtitle accepts static string ONLY** — NOT functions. Use `getCurrentText()` call, not reference
 - **Use `dirtyAll` flag + `lvgl.clear()` + `buildUi()` for structural changes** (favorite toggle, band switch) — this is the only reliable rebuild method
 - **`checked` only accepts static booleans** — NOT functions. Set at build time
 - **`active = function()` works** for dynamic enable/disable
@@ -30,8 +31,9 @@ Single-file EdgeTX Lua script (`EasyVTXch.lua`) for simplified VTX channel chang
 - **`set({text = ...})` works** on existing widgets for text updates
 - **`set({checked = ...})` does NOT visually update** — must rebuild instead
 - **Focus control is impossible** — no Lua API for focus. `NO_FOCUS` flag exists only in C++
-- **`FLOW_ROW` doesn't auto-wrap** — create explicit rows for grid layouts
-- Use explicit `x, y` positioning for page-level layout
+- **Use absolute `x, y` positioning** — `flexFlow` on page causes nested padding (each flex level adds 2px `PAD_OUTLINE`). `borderPad` and `PERCENT_SIZE` are unavailable in RM 3.0.0 build
+- **No flex on page = body padding 0, body width = LCD_W**. Calculate `contentW = SW - MARGIN*2` and position buttons with `x = MARGIN + col * (btnW + PAD)`
+- Use spacer label at bottom (`h = 1, text = ""`) to extend scrollable area for bottom margin
 
 ### CRSF Protocol
 - Field IDs are **dynamic** per firmware version — always discover by name, never hardcode
@@ -45,6 +47,8 @@ Single-file EdgeTX Lua script (`EasyVTXch.lua`) for simplified VTX channel chang
 ### Deployment
 - **Always delete `.luac` when updating `.lua`!** EdgeTX caches compiled bytecode
 - Copy to simulator: `rm -f ~/Documents/EdgeTX_SD/SCRIPTS/TOOLS/EasyVTXch.luac && cp EasyVTXch.lua ~/Documents/EdgeTX_SD/SCRIPTS/TOOLS/`
+- Copy to real SD card (TX15): `rm -f /Volumes/TX15/SCRIPTS/TOOLS/EasyVTXch.luac && cp EasyVTXch.lua /Volumes/TX15/SCRIPTS/TOOLS/`
+- **Always delete `.luac` AND copy `.lua` on ALL targets** — forgetting either causes stale code to run
 
 ## Testing
 ```bash
