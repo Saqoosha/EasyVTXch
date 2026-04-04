@@ -31,7 +31,7 @@ SYS → Tools → ELRS → 待ち → VTX Admin → Band → Channel → Power �
 | **VTX** | SmartAudio, Tramp, または HDZero（DisplayPort）対応の VTX |
 | **レシーバー** | VTX と接続された ELRS レシーバー |
 
-> **自分の環境で使えるか確認するには？** ゴーグルの OSD から VTX のチャンネルやパワーを変更できるなら（Betaflight OSD → VTX 設定）、SmartAudio/Tramp はすでに動いています。EasyVTXch は同じ接続を使います — OSD の代わりにプロポから操作するだけです。
+> **前提条件：** ゴーグルの OSD から VTX のチャンネルやパワーを変更できる状態が必要です（Betaflight OSD → VTX 設定）。OSD から変更できるなら、SmartAudio/Tramp とテレメトリーが正しく設定されており、EasyVTXch も動作します。
 
 ## インストール
 
@@ -95,7 +95,7 @@ SYS → Tools → ELRS → 待ち → VTX Admin → Band → Channel → Power �
 | "VTX fields incomplete" | ELRS ファームウェアが古い可能性があります。ELRS 3.x 以降にアップデートしてください。 |
 | Tools にスクリプトが表示されない | ファイル名が `EasyVTXch.lua`（大文字小文字を区別）であること、`/SCRIPTS/TOOLS/` に配置されていることを確認。 |
 | ファイルを置き換えても更新されない | 同じフォルダの `EasyVTXch.luac` を削除してください。EdgeTX がキャッシュを使っています。 |
-| チャンネルは変わるが VTX が反応しない | レシーバーと VTX 間の配線（SmartAudio, Tramp, または DisplayPort）を確認。VTX がそのプロトコルに対応しているかも確認してください。 |
+| 送信完了と表示されるが実際の VTX 周波数が変わらない | まず Betaflight OSD から VTX 設定を変更できるか確認してください。OSD からの VTX 制御が動かないなら EasyVTXch も動きません — 先に SmartAudio/Tramp の配線と Betaflight のテレメトリー設定を修正してください。 |
 
 ## 対応周波数一覧
 

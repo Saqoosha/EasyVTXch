@@ -31,7 +31,7 @@ SYS → Tools → ELRS → wait → VTX Admin → Band → Channel → Power →
 | **VTX** | Any VTX with SmartAudio, Tramp, or HDZero (DisplayPort) |
 | **Receiver** | ELRS receiver connected to the VTX |
 
-> **How do I know if my setup is compatible?** If you can change VTX channel/power from your goggles OSD (Betaflight OSD → VTX settings), SmartAudio/Tramp is already working. EasyVTXch uses the same connection — just controlled from your radio instead of the OSD.
+> **Prerequisite:** You must be able to change VTX channel/power from your goggles OSD (Betaflight OSD → VTX settings). If that works, your SmartAudio/Tramp and telemetry are properly configured and EasyVTXch will work.
 
 ## Installation
 
@@ -95,7 +95,7 @@ Favorites are marked with a `*` and shown at the top of the list.
 | "VTX fields incomplete" | Your ELRS firmware may be too old. Update to ELRS 3.x or newer. |
 | Script doesn't appear in Tools | Make sure the file is named `EasyVTXch.lua` (case-sensitive) and is in `/SCRIPTS/TOOLS/`. |
 | Script doesn't update after replacing file | Delete `EasyVTXch.luac` from the same folder. EdgeTX caches compiled scripts. |
-| Channel changes but VTX doesn't respond | Check the wiring between your receiver and VTX (SmartAudio, Tramp, or DisplayPort). Also verify your VTX supports the protocol. |
+| Script says "sent" but VTX frequency doesn't actually change | Make sure you can change VTX settings from Betaflight OSD first. If OSD VTX control doesn't work, EasyVTXch won't work either — fix your SmartAudio/Tramp wiring and Betaflight telemetry setup first. |
 
 ## Supported Frequencies
 
