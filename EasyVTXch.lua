@@ -921,4 +921,16 @@ local function run(event, touchState)
   return 0
 end
 
-return { init = init, run = run, useLvgl = true }
+local script = { init = init, run = run, useLvgl = true }
+
+-- Test hook: expose internal helpers to the desktop test harness when it
+-- sets `__EASYVTX_TEST` before loading. EdgeTX never sets this global, so
+-- real radios pay nothing beyond one nil check at load time.
+if _G.__EASYVTX_TEST then
+  script.__testHooks = {
+    manualSort = manualSort,
+    manualRemove = manualRemove,
+  }
+end
+
+return script

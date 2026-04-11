@@ -86,6 +86,9 @@ lvgl = nil
 ---- Load the script ----
 
 print("=== Loading EasyVTXch.lua ===")
+-- Opt into the test hook so we can exercise the real manualSort/manualRemove
+-- implementations instead of duplicating them in the test file.
+_G.__EASYVTX_TEST = true
 local chunk, err = loadfile("EasyVTXch.lua")
 if not chunk then
   print("LOAD ERROR: " .. err)
@@ -331,35 +334,14 @@ assert(content == "R1\nR4\nF3\n", "Favorites file content mismatch")
 print("PASS: Favorites file format is correct")
 
 ---- Test 7: manualSort / manualRemove regression (issue #1) ----
--- manualSort / manualRemove are local to EasyVTXch.lua, so we can't reach them
--- through the mock harness. Inlined copies below — KEEP IN SYNC with the
--- definitions in EasyVTXch.lua lines ~101-125. These guard against regressions
--- in the pure-Lua fallbacks that avoid QX7S / EdgeTX 2.11.4's stripped
--- table.sort / table.remove.
+-- Exercise the production fallbacks for QX7S / EdgeTX 2.11.4 (where
+-- table.sort / table.remove are stripped) through the __testHooks that
+-- EasyVTXch.lua exposes when `__EASYVTX_TEST` is set.
 print("\n=== Test 7: manualSort / manualRemove ===")
 
-local function manualSort(t, comp)
-  local n = #t
-  repeat
-    local swapped = false
-    for i = 1, n - 1 do
-      if comp(t[i + 1], t[i]) then
-        t[i], t[i + 1] = t[i + 1], t[i]
-        swapped = true
-      end
-    end
-    n = n - 1
-  until not swapped
-end
-
-local function manualRemove(t, idx)
-  local n = #t
-  if idx < 1 or idx > n then return end
-  for i = idx, n - 1 do
-    t[i] = t[i + 1]
-  end
-  t[n] = nil
-end
+local hooks = assert(script.__testHooks, "missing script.__testHooks — set _G.__EASYVTX_TEST before loading")
+local manualSort = hooks.manualSort
+local manualRemove = hooks.manualRemove
 
 local function asc(a, b) return a < b end
 local function eqList(a, b)
