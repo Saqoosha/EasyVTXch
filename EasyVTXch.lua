@@ -98,8 +98,31 @@ local bwItemsDirty = true  -- invalidate B&W item cache
 
 ---- [3] Favorites Persistence ----
 
+-- Some EdgeTX builds (e.g. QX7S on EdgeTX 2.11.4) expose a nil `table` global,
+-- so table.sort/table.remove crash. Use local fallbacks that work everywhere.
+local function manualSort(t, comp)
+  local n = #t
+  repeat
+    local swapped = false
+    for i = 1, n - 1 do
+      if comp(t[i + 1], t[i]) then
+        t[i], t[i + 1] = t[i + 1], t[i]
+        swapped = true
+      end
+    end
+    n = n - 1
+  until not swapped
+end
+
+local function manualRemove(t, idx)
+  for i = idx, #t - 1 do
+    t[i] = t[i + 1]
+  end
+  t[#t] = nil
+end
+
 local function sortFavorites()
-  table.sort(favorites, function(a, b)
+  manualSort(favorites, function(a, b)
     local fa = FREQ[a.band]
     local fb = FREQ[b.band]
     return (fa and fa[a.channel] or 0) < (fb and fb[b.channel] or 0)
@@ -164,7 +187,7 @@ local function toggleFavorite(band, ch)
   if favLookup[key] then
     for i, fav in ipairs(favorites) do
       if fav.band == band and fav.channel == ch then
-        table.remove(favorites, i)
+        manualRemove(favorites, i)
         break
       end
     end
