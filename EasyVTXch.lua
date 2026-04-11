@@ -98,8 +98,10 @@ local bwItemsDirty = true  -- invalidate B&W item cache
 
 ---- [3] Favorites Persistence ----
 
--- Some EdgeTX builds (e.g. QX7S on EdgeTX 2.11.4) expose a nil `table` global,
--- so table.sort/table.remove crash. Use local fallbacks that work everywhere.
+-- Some EdgeTX builds (e.g. QX7S on EdgeTX 2.11.4) ship a scripting sandbox
+-- where `table.sort` / `table.remove` are stripped, so indexing them raises
+-- "attempt to index a nil value (field 'table')" when toggling favorites.
+-- Local pure-Lua fallbacks avoid the global entirely. See issue #1.
 local function manualSort(t, comp)
   local n = #t
   repeat
@@ -115,10 +117,12 @@ local function manualSort(t, comp)
 end
 
 local function manualRemove(t, idx)
-  for i = idx, #t - 1 do
+  local n = #t
+  if idx < 1 or idx > n then return end
+  for i = idx, n - 1 do
     t[i] = t[i + 1]
   end
-  t[#t] = nil
+  t[n] = nil
 end
 
 local function sortFavorites()
