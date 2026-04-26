@@ -51,7 +51,7 @@ local RETRY_MAX = 10
 local FIELD_CACHE_PATH = "/SCRIPTS/TOOLS/easyvtxch.cache"
 
 -- Bump when releasing a new build (shown in the UI footer)
-local APP_VERSION = "1.3.1"
+local APP_VERSION = "1.4.0"
 
 ---- [2] State ----
 
