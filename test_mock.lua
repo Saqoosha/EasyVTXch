@@ -24,6 +24,8 @@ COLOR_THEME_SECONDARY2 = 0xFF999999
 COLOR_THEME_WARNING = 0xFFFF0000
 COLOR_THEME_ACTIVE = 0xFF00FF00
 COLOR_THEME_FOCUS = 0xFF0000FF
+BLACK = 0xFF000000
+WHITE = 0xFFFFFFFF
 
 -- Event constants
 EVT_VIRTUAL_ENTER = 1
@@ -245,6 +247,48 @@ advanceTime(1)
 
 print("PASS: All 4 fields enumerated")
 
+---- Test 4.5: Current channel from Band/Channel field values ----
+print("\n=== Test 4.5: Current channel from field values ===")
+
+mockTime = 0
+crsfOutbox = {}
+crsfInbox = {}
+script = loadfile("EasyVTXch.lua")()
+script.init()
+clearCrsfOutbox()
+
+injectCrsfResponse(0x29, deviceInfo)
+script.run(0)
+advanceTime(1)
+clearCrsfOutbox()
+
+local f1payloadNoCurrent = { 0, 11 }
+for _, b in ipairs(strBytes("VTX Administrator")) do f1payloadNoCurrent[#f1payloadNoCurrent + 1] = b end
+for _, b in ipairs(strBytes("VTX")) do f1payloadNoCurrent[#f1payloadNoCurrent + 1] = b end
+injectCrsfResponse(0x2B, paramResp(1, 0, f1payloadNoCurrent))
+script.run(0)
+advanceTime(1)
+clearCrsfOutbox()
+
+injectCrsfResponse(0x2B, paramResp(2, 0, f2payload))
+script.run(0)
+advanceTime(1)
+clearCrsfOutbox()
+
+injectCrsfResponse(0x2B, paramResp(3, 0, f3payload))
+script.run(0)
+advanceTime(1)
+clearCrsfOutbox()
+
+injectCrsfResponse(0x2B, paramResp(4, 0, f4payload))
+script.run(0)
+advanceTime(1)
+
+local valueHooks = assert(script.__testHooks, "missing script.__testHooks after reload")
+assert(type(valueHooks.isCurrentChannel) == "function", "isCurrentChannel hook missing")
+assert(valueHooks.isCurrentChannel("R", 4), "Band/Channel field values should initialize current channel")
+print("PASS: Current channel initialized from Band/Channel values")
+
 ---- Test 5: VTX Channel Send ----
 print("\n=== Test 5: Send VTX channel R6 ===")
 clearCrsfOutbox()
@@ -421,6 +465,38 @@ t = {}
 manualRemove(t, 1)
 assert(#t == 0, "remove from empty should stay empty")
 print("PASS: manualRemove handles first/middle/last/single/out-of-range/empty")
+
+---- Test 8: button labels keep favorite and current indicators distinct ----
+print("\n=== Test 8: Button label formatting ===")
+
+local formatChannelText = hooks.formatChannelText
+local formatBwChannelText = hooks.formatBwChannelText
+local shouldShowFavoriteChecked = hooks.shouldShowFavoriteChecked
+local getCurrentButtonColor = hooks.getCurrentButtonColor
+local getCurrentButtonTextColor = hooks.getCurrentButtonTextColor
+local getCurrentButtonFont = hooks.getCurrentButtonFont
+assert(type(formatChannelText) == "function", "formatChannelText hook missing")
+assert(type(formatBwChannelText) == "function", "formatBwChannelText hook missing")
+assert(type(shouldShowFavoriteChecked) == "function", "shouldShowFavoriteChecked hook missing")
+assert(type(getCurrentButtonColor) == "function", "getCurrentButtonColor hook missing")
+assert(type(getCurrentButtonTextColor) == "function", "getCurrentButtonTextColor hook missing")
+assert(type(getCurrentButtonFont) == "function", "getCurrentButtonFont hook missing")
+assert(formatChannelText("R", 4, false, false) == "R4 5769", "plain channel label mismatch")
+assert(formatChannelText("R", 4, true, false) == "R4 5769", "favorite channel label should rely on checked color")
+assert(formatChannelText("R", 4, false, true) == "R4 5769", "current channel label should rely on inverted colors")
+assert(formatChannelText("R", 4, true, true) == "R4 5769", "current favorite label should not duplicate visual markers")
+assert(formatBwChannelText("R", 4, false) == "R4 5769", "B&W plain label mismatch")
+assert(formatBwChannelText("R", 4, true) == "> R4 5769", "B&W current label should keep a text marker")
+assert(shouldShowFavoriteChecked(false, false) == false, "plain channel should not be checked")
+assert(shouldShowFavoriteChecked(true, false) == true, "non-current favorite should stay checked")
+assert(shouldShowFavoriteChecked(true, true) == false, "current favorite should rely on inverted colors")
+assert(getCurrentButtonColor(false) == nil, "non-current button should not override background color")
+assert(getCurrentButtonColor(true) == BLACK, "current button should use black background color")
+assert(getCurrentButtonTextColor(false) == nil, "non-current button should not override text color")
+assert(getCurrentButtonTextColor(true) == WHITE, "current button should use white text color")
+assert(getCurrentButtonFont(false) == nil, "non-current button should not override font")
+assert(getCurrentButtonFont(true) == BOLD, "current button should use bold font")
+print("PASS: Button labels avoid duplicate visual markers")
 
 ---- Summary ----
 print("\n=== All tests passed! ===")
