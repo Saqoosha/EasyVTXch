@@ -50,6 +50,9 @@ local RETRY_MAX = 10
 
 local FIELD_CACHE_PATH = "/SCRIPTS/TOOLS/easyvtxch.cache"
 
+-- Bump when releasing a new build (shown in the UI footer)
+local APP_VERSION = "1.3.1"
+
 ---- [2] State ----
 
 local State = {
@@ -274,10 +277,14 @@ local function crsfPop()
 end
 
 local function sendPing()
+  local fromError = (crsf.state == State.ERROR)
   crsfPush(CMD_PING, { 0x00, CRSF_ADDR_RADIO })
   crsf.timer = getTime()
   crsf.state = State.PINGING
   statusText = "Connecting..."
+  if fromError then
+    refreshUi()
+  end
 end
 
 local function requestField(fieldId)
@@ -380,6 +387,7 @@ local function parseDeviceInfo(data)
   if crsf.fieldCount == 0 then
     statusText = "No fields found"
     crsf.state = State.ERROR
+    refreshUi()
     return
   end
 
@@ -507,6 +515,7 @@ findVtxFields = function()
   if not crsf.vtxFolderId then
     statusText = "VTX Admin not found"
     crsf.state = State.ERROR
+    refreshUi()
     return
   end
 
@@ -526,6 +535,7 @@ findVtxFields = function()
   if not (crsf.bandFieldId and crsf.channelFieldId and crsf.sendFieldId) then
     statusText = "VTX fields incomplete"
     crsf.state = State.ERROR
+    refreshUi()
     return
   end
 
@@ -625,6 +635,7 @@ local function processCrsf()
     else
       statusText = "TX module not found"
       crsf.state = State.ERROR
+      refreshUi()
     end
   elseif crsf.state == State.ENUMERATING and elapsed > TIMEOUT_ENUM then
     if crsf.verifyCache then
@@ -762,23 +773,45 @@ local function buildUi()
   end
 
   local bottomY = y + (chanBtnH + PAD) * 2
+  local footerY = bottomY + PAD
+  local verText = "EasyVTXch v" .. APP_VERSION
+  local function notError() return crsf.state ~= State.ERROR end
+  local function isError() return crsf.state == State.ERROR end
 
-  -- Retry button
+  -- Retry button (error only); version tucks under it when both visible
   local retryW = math.floor(contentW * 0.4)
+  local retryH = math.max(32, bandBtnH)
   page:button({
     x = MARGIN + math.floor((contentW - retryW) / 2),
-    y = bottomY + PAD,
+    y = footerY,
     w = retryW,
+    h = retryH,
     text = "Retry Connection",
-    visible = function() return crsf.state == State.ERROR end,
+    visible = isError,
     press = function()
       crsf.retryCount = 0
       sendPing()
     end,
   })
+  page:label({
+    x = MARGIN, y = footerY, w = contentW, h = 20,
+    text = verText,
+    visible = notError,
+  })
+  page:label({
+    x = MARGIN, y = footerY + retryH + PAD, w = contentW, h = 20,
+    text = verText,
+    visible = isError,
+  })
 
   -- Bottom spacer (extends scrollable area for bottom margin)
-  page:label({ x = 0, y = bottomY + MARGIN, h = 1, text = "" })
+  local spacerY = footerY
+  if crsf.state == State.ERROR then
+    spacerY = footerY + retryH + PAD + 20 + MARGIN
+  else
+    spacerY = footerY + 20 + MARGIN
+  end
+  page:label({ x = 0, y = spacerY, h = 1, text = "" })
 end
 
 ---- [8] B&W Fallback (128x64) ----
@@ -843,6 +876,9 @@ local function drawBwUi()
     local attr = (idx == bw.cursor) and INVERS or 0
     lcd.drawText(1, y, items[idx].label, SMLSIZE + attr)
   end
+
+  local vh = LCD_H or 64
+  lcd.drawText(1, vh - 7, "v" .. APP_VERSION, SMLSIZE)
 end
 
 local function handleBwEvent(event)
@@ -898,6 +934,7 @@ local function run(event, touchState)
   if not ok then
     statusText = tostring(err)
     crsf.state = State.ERROR
+    refreshUi()
   end
 
   -- Full UI rebuild (lvgl.clear + rebuild)
