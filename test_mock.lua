@@ -86,6 +86,9 @@ lvgl = nil
 ---- Load the script ----
 
 print("=== Loading EasyVTXch.lua ===")
+-- Opt into the test hook so we can exercise the real manualSort/manualRemove
+-- implementations instead of duplicating them in the test file.
+_G.__EASYVTX_TEST = true
 local chunk, err = loadfile("EasyVTXch.lua")
 if not chunk then
   print("LOAD ERROR: " .. err)
@@ -329,6 +332,95 @@ local content = f:read("*a")
 f:close()
 assert(content == "R1\nR4\nF3\n", "Favorites file content mismatch")
 print("PASS: Favorites file format is correct")
+
+---- Test 7: manualSort / manualRemove regression (issue #1) ----
+-- Exercise the production fallbacks for QX7S / EdgeTX 2.11.4 (where
+-- table.sort / table.remove are stripped) through the __testHooks that
+-- EasyVTXch.lua exposes when `__EASYVTX_TEST` is set.
+print("\n=== Test 7: manualSort / manualRemove ===")
+
+local hooks = assert(script.__testHooks, "missing script.__testHooks — set _G.__EASYVTX_TEST before loading")
+local manualSort = hooks.manualSort
+local manualRemove = hooks.manualRemove
+
+local function asc(a, b) return a < b end
+local function eqList(a, b)
+  if #a ~= #b then return false end
+  for i = 1, #a do if a[i] ~= b[i] then return false end end
+  return true
+end
+
+-- manualSort: empty
+local t = {}
+manualSort(t, asc)
+assert(#t == 0, "empty sort should stay empty")
+
+-- manualSort: single
+t = { 42 }
+manualSort(t, asc)
+assert(eqList(t, { 42 }), "single element sort broken")
+
+-- manualSort: already sorted (early exit path)
+t = { 1, 2, 3, 4, 5 }
+manualSort(t, asc)
+assert(eqList(t, { 1, 2, 3, 4, 5 }), "sorted list should stay sorted")
+
+-- manualSort: reversed
+t = { 5, 4, 3, 2, 1 }
+manualSort(t, asc)
+assert(eqList(t, { 1, 2, 3, 4, 5 }), "reverse sort broken")
+
+-- manualSort: duplicates
+t = { 3, 1, 2, 1, 3, 2 }
+manualSort(t, asc)
+assert(eqList(t, { 1, 1, 2, 2, 3, 3 }), "duplicate sort broken")
+
+-- manualSort: favorites-shaped comparator (band+channel → frequency proxy)
+local favs = {
+  { band = "R", channel = 8, freq = 5917 },
+  { band = "A", channel = 1, freq = 5865 },
+  { band = "R", channel = 1, freq = 5658 },
+}
+manualSort(favs, function(a, b) return a.freq < b.freq end)
+assert(favs[1].band == "R" and favs[1].channel == 1, "freq sort order wrong (1st)")
+assert(favs[2].band == "A" and favs[2].channel == 1, "freq sort order wrong (2nd)")
+assert(favs[3].band == "R" and favs[3].channel == 8, "freq sort order wrong (3rd)")
+print("PASS: manualSort handles empty/single/sorted/reversed/duplicates/records")
+
+-- manualRemove: first
+t = { 1, 2, 3, 4 }
+manualRemove(t, 1)
+assert(eqList(t, { 2, 3, 4 }), "remove first broken")
+
+-- manualRemove: middle
+t = { 1, 2, 3, 4 }
+manualRemove(t, 2)
+assert(eqList(t, { 1, 3, 4 }), "remove middle broken")
+
+-- manualRemove: last
+t = { 1, 2, 3, 4 }
+manualRemove(t, 4)
+assert(eqList(t, { 1, 2, 3 }), "remove last broken")
+
+-- manualRemove: single element
+t = { 99 }
+manualRemove(t, 1)
+assert(#t == 0, "remove single element broken")
+
+-- manualRemove: out-of-range idx must not mutate the table (defensive guard)
+t = { 1, 2, 3 }
+manualRemove(t, 0)
+assert(eqList(t, { 1, 2, 3 }), "remove idx=0 should be a no-op")
+manualRemove(t, 4)
+assert(eqList(t, { 1, 2, 3 }), "remove idx>#t should be a no-op")
+manualRemove(t, -1)
+assert(eqList(t, { 1, 2, 3 }), "remove negative idx should be a no-op")
+
+-- manualRemove: empty list is a no-op
+t = {}
+manualRemove(t, 1)
+assert(#t == 0, "remove from empty should stay empty")
+print("PASS: manualRemove handles first/middle/last/single/out-of-range/empty")
 
 ---- Summary ----
 print("\n=== All tests passed! ===")

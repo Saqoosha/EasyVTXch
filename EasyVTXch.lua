@@ -98,8 +98,35 @@ local bwItemsDirty = true  -- invalidate B&W item cache
 
 ---- [3] Favorites Persistence ----
 
+-- Some EdgeTX builds (e.g. QX7S on EdgeTX 2.11.4) ship a scripting sandbox
+-- where `table.sort` / `table.remove` are stripped, so indexing them raises
+-- "attempt to index a nil value (field 'table')" when toggling favorites.
+-- Local pure-Lua fallbacks avoid the global entirely. See issue #1.
+local function manualSort(t, comp)
+  local n = #t
+  repeat
+    local swapped = false
+    for i = 1, n - 1 do
+      if comp(t[i + 1], t[i]) then
+        t[i], t[i + 1] = t[i + 1], t[i]
+        swapped = true
+      end
+    end
+    n = n - 1
+  until not swapped
+end
+
+local function manualRemove(t, idx)
+  local n = #t
+  if idx < 1 or idx > n then return end
+  for i = idx, n - 1 do
+    t[i] = t[i + 1]
+  end
+  t[n] = nil
+end
+
 local function sortFavorites()
-  table.sort(favorites, function(a, b)
+  manualSort(favorites, function(a, b)
     local fa = FREQ[a.band]
     local fb = FREQ[b.band]
     return (fa and fa[a.channel] or 0) < (fb and fb[b.channel] or 0)
@@ -164,7 +191,7 @@ local function toggleFavorite(band, ch)
   if favLookup[key] then
     for i, fav in ipairs(favorites) do
       if fav.band == band and fav.channel == ch then
-        table.remove(favorites, i)
+        manualRemove(favorites, i)
         break
       end
     end
@@ -894,4 +921,16 @@ local function run(event, touchState)
   return 0
 end
 
-return { init = init, run = run, useLvgl = true }
+local script = { init = init, run = run, useLvgl = true }
+
+-- Test hook: expose internal helpers to the desktop test harness when it
+-- sets `__EASYVTX_TEST` before loading. EdgeTX never sets this global, so
+-- real radios pay nothing beyond one nil check at load time.
+if _G.__EASYVTX_TEST then
+  script.__testHooks = {
+    manualSort = manualSort,
+    manualRemove = manualRemove,
+  }
+end
+
+return script
