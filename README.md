@@ -15,6 +15,7 @@ SYS → Tools → ELRS → wait → VTX Admin → Band → Channel → Power →
 
 - **One-tap switching** — tap a channel button and the VTX command is sent instantly
 - **Favorites** — long-press any channel to save it. Your favorites appear at the top for quick access
+- **Shows the current VTX channel** — highlights the channel ELRS reports as active (from VTX Admin field values, with a fallback to the VTX folder dynamic name when present)
 - **All 5 bands** — A, B, E, F, R with 8 channels each (40 channels total)
 - **Frequency display** — every button shows the actual frequency in MHz
 - **Remembers your settings** — favorites and last selected band persist across power cycles
@@ -73,6 +74,8 @@ To update, just overwrite the `.lua` file with the new version. If the script do
 
 Favorite channels appear in a quick-access grid at the top of the screen.
 
+**Current channel vs favorite:** non-current favorites use the normal “checked” styling. The current channel is highlighted with **black background, white text, and bold font** so it stays obvious even when it is also a favorite.
+
 ### B&W LCD Radios (Boxer, Zorro, TX12, etc.)
 
 > **Note:** B&W LCD support is included but not yet tested on real hardware.
@@ -84,7 +87,7 @@ Favorite channels appear in a quick-access grid at the top of the screen.
 | **Long-press Enter** | Add/remove favorite |
 | **Menu** | Cycle through bands (A → B → E → F → R) |
 
-Favorites are marked with a `*` and shown at the top of the list.
+Favorites are marked with a `*` and shown at the top of the list. The current channel (as reported by ELRS) is prefixed with `>` (for example `> R4 5769`, or `> * R4 5769` when it is both current and a favorite).
 
 ## Troubleshooting
 
@@ -96,6 +99,7 @@ Favorites are marked with a `*` and shown at the top of the list.
 | Script doesn't appear in Tools | Make sure the file is named `EasyVTXch.lua` (case-sensitive) and is in `/SCRIPTS/TOOLS/`. |
 | Script doesn't update after replacing file | Delete `EasyVTXch.luac` from the same folder. EdgeTX caches compiled scripts. |
 | Script says "sent" but VTX frequency doesn't actually change | Make sure you can change VTX settings from Betaflight OSD first. If OSD VTX control doesn't work, EasyVTXch won't work either — fix your SmartAudio/Tramp wiring and Betaflight telemetry setup first. |
+| Current channel highlight looks wrong | EasyVTXch mirrors ELRS VTX Admin field state (Band/Channel values). If ELRS Lua shows a different saved channel, refresh telemetry / reopen the script after the module finishes loading fields. |
 
 ## Supported Frequencies
 
@@ -118,6 +122,10 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for internal architecture, CRSF protocol 
 ```bash
 lua5.4 test_mock.lua
 ```
+
+If `lua5.4` is not installed, use your system Lua 5.x (for example `lua test_mock.lua` on macOS/Homebrew).
+
+Tests cover: init ping, device info parsing, field enumeration, current-channel initialization (VTX folder dynName and Band/Channel field values), VTX send sequence (with value assertions for band/channel/send/confirm), favorites file format, and UI label helpers. CRSF communication and LVGL UI must still be tested on real hardware or the EdgeTX Companion simulator.
 
 ## License
 

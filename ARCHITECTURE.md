@@ -85,6 +85,18 @@ The VTX Administrator folder's dynamic name encodes current state:
 ```
 Parsed with: `string.match(dynName, "%((%a):(%d+)")`
 
+EasyVTXch uses this as a **best-effort** source for `crsf.currentBand` / `crsf.currentChannel` when the pattern matches.
+
+### Current Channel From Field Values (Preferred)
+Some ELRS builds do not include the `(Band:Ch:...)` summary in the VTX folder dynamic name on startup, even though the saved VTX state is visible in ELRS Lua.
+
+To keep the UI aligned with ELRS on first launch, EasyVTXch also initializes the current channel from the discovered VTX Admin fields:
+
+- **Band (`TEXT_SELECTION`)**: maps `field.value` (1-based index: A=1..R=5) → `BAND_NAMES[value]`
+- **Channel (`UINT8`)**: maps CRSF value → UI channel with `uiCh = field.value - field.min + 1` (ELRS typically uses `min=1`)
+
+These updates happen during `parseFieldData()` (enumeration) and are re-applied in `findVtxFields()` after a full scan.
+
 ## State Machine
 
 ```
@@ -122,6 +134,7 @@ Two modes: **cached** (fast) and **full** (fallback).
 ### READY
 - UI is interactive, channel/fav/band buttons enabled
 - Tap triggers SENDING sequence
+- The UI can highlight the **current** VTX channel using `crsf.currentBand` / `crsf.currentChannel` (derived from ELRS field state as described above)
 
 ### SENDING (4-step sequence)
 ```
@@ -148,10 +161,11 @@ During the SENDING sequence, incoming `CMD_PARAM_RESP` messages are validated: t
 
 ### Widget Tree
 ```
-page (title="EasyVTXch", subtitle=statusText or currentFreq)
+page (title="EasyVTXch", subtitle=getCurrentText() or statusText)
 ├── favorite buttons × N (absolute positioned, 4 per row, visible=isConnected)
 ├── band buttons × 5 (A/B/E/F/R, absolute positioned, checked=selected, visible=isConnected)
-├── channel buttons × 8 (2 rows × 4, absolute positioned, checked=isFavorite, visible=isConnected)
+├── channel buttons × 8 (2 rows × 4, absolute positioned, checked=favorite && !current, visible=isConnected)
+│   └── current channel styling: color=BLACK, textColor=WHITE, font=BOLD (literal EdgeTX color constants)
 ├── retryButton (visible when ERROR state)
 └── spacer label (h=1, extends scrollable area for bottom margin)
 ```
@@ -159,6 +173,8 @@ page (title="EasyVTXch", subtitle=statusText or currentFreq)
 All buttons are placed directly on the page using absolute `x, y` positioning (no flex containers). This avoids nested padding issues where each flex level adds 2px `PAD_OUTLINE`. Status text is shown in the page subtitle (merged with current freq display).
 
 All interactive elements are hidden until the CRSF connection is established (`visible = isConnected`). Only the retry button is visible during error state.
+
+**Favorite vs current:** if a channel is both a favorite and the current VTX channel, `checked` is forced off for that button so the stronger “current” styling wins (LVGL `checked` updates are not reliable via `set()` anyway — see rebuild notes below).
 
 ### Rebuild Strategy
 The UI uses a **full rebuild** approach via `dirtyAll` flag:
@@ -176,13 +192,23 @@ The UI uses a **full rebuild** approach via `dirtyAll` flag:
 
 **Tradeoff:** Focus resets to first element on rebuild. Focus control is not available in EdgeTX Lua API.
 
+## B&W Fallback UI
+
+When `lvgl` is unavailable, the tool renders a scrolling list using `lcd.drawText()`:
+
+- Items are built from favorites (sorted by frequency) followed by the 8 channels of `selectedBand`
+- Favorites are labeled with a `*` prefix
+- The ELRS-reported current channel is labeled with a `>` prefix (if both favorite and current: `> * ...`)
+
+The item list is cached (`bwItemsCache`) and only rebuilt when `bwItemsDirty` is set.
+
 ### Performance Optimizations
 - **Field ID caching**: Saves discovered VTX field IDs to `easyvtxch.cache`. On subsequent launches, only 4 fields are read and verified instead of enumerating all 30+ fields. Reduces startup from ~5s to <1s
 - **Early termination**: During full enumeration, stops as soon as all 4 VTX fields are found (via inline detection in `parseFieldData`) instead of loading every field
 - **Aggressive ping retry**: 200ms interval with 10 retries vs original 3s × 5. Faster connection to responsive modules
 - **`favLookup`**: Hash table `{ ["R1"]=true, ... }` rebuilt on favorite change for O(1) `isFavorite()` lookups
 - **`bandDirty`**: Defers `saveFavorites()` to script exit instead of saving on every band switch (reduces flash wear)
-- **`bwItemsDirty`**: Caches B&W mode item list, invalidated only on band switch or favorite toggle (avoids per-frame allocation)
+- **`bwItemsDirty`**: Caches B&W mode item list, invalidated on band switch, favorite toggle, successful VTX send completion, and whenever ELRS-reported current band/channel changes during field parsing (avoids per-frame allocation)
 - **`getCurrentText()`**: Derived function instead of cached state variable (eliminates stale state risk)
 - **`writeParam()`**: Helper that consolidates `crsfPush` + state transition + timer reset
 

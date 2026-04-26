@@ -3,6 +3,8 @@
 ## Project Overview
 EdgeTX Lua scripts for simplified VTX channel changing via ELRS CRSF protocol. Includes a tool script (main UI + favorites management) and a widget for background VTX switching via 6-position switch.
 
+The tool script highlights the **current** VTX channel reported by ELRS (via VTX Admin Band/Channel field values, with a fallback to the VTX folder dynamic name when it includes `(B:ch:...)`). Color LCD uses LVGL button styling; B&W uses text prefixes (`>` current, `*` favorite).
+
 ## Key Files
 - `EasyVTXch.lua` — main tool script (goes in `/SCRIPTS/TOOLS/` on SD card)
 - `EasyVTXch_widget.lua` — widget for 6-pos switch VTX control (goes in `/WIDGETS/EasyVTXch/main.lua` on SD card)
@@ -35,6 +37,7 @@ EdgeTX Lua scripts for simplified VTX channel changing via ELRS CRSF protocol. I
 - **Use absolute `x, y` positioning** — `flexFlow` on page causes nested padding (each flex level adds 2px `PAD_OUTLINE`). `borderPad` and `PERCENT_SIZE` are unavailable in RM 3.0.0 build
 - **No flex on page = body padding 0, body width = LCD_W**. Calculate `contentW = SW - MARGIN*2` and position buttons with `x = MARGIN + col * (btnW + PAD)`
 - Use spacer label at bottom (`h = 1, text = ""`) to extend scrollable area for bottom margin
+- **Button styling**: LVGL `button` supports `color` (background), `textColor`, and `font` (for example `BOLD`, `MIDSIZE`). EasyVTXch uses literal `BLACK` / `WHITE` for the current channel highlight.
 
 ### CRSF Protocol
 - Field IDs are **dynamic** per firmware version — always discover by name, never hardcode
@@ -68,7 +71,9 @@ EdgeTX Lua scripts for simplified VTX channel changing via ELRS CRSF protocol. I
 ```bash
 lua5.4 test_mock.lua
 ```
-Tests cover: init ping, device info parsing, field enumeration, VTX send sequence (with value assertions for band/channel/send/confirm), favorites file format. CRSF communication and LVGL UI must be tested on real hardware or EdgeTX Companion simulator.
+If `lua5.4` is not available, `lua test_mock.lua` is fine on environments where `lua` is Lua 5.x.
+
+Tests cover: init ping, device info parsing, field enumeration, current-channel initialization (VTX folder dynName and Band/Channel field values), VTX send sequence (with value assertions for band/channel/send/confirm), favorites file format, and UI label/checked helper behavior. CRSF communication and LVGL UI must be tested on real hardware or EdgeTX Companion simulator.
 
 ## Font Constants
 Use EdgeTX standard constants: `SMLSIZE`, `MIDSIZE`, `DBLSIZE`, `XXLSIZE`, `BOLD`, `INVERS`, `CENTER`
