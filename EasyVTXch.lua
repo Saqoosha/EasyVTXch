@@ -262,6 +262,38 @@ local function fieldGetString(data, offset)
   return s, i + 1
 end
 
+local function setCurrentBandChannel(band, ch)
+  if not (BAND_VALUES[band] and ch and ch >= 1 and ch <= 8) then return end
+  crsf.currentBand = band
+  crsf.currentChannel = ch
+  bwItemsDirty = true
+end
+
+local function setCurrentFromDynName(dynName)
+  if type(dynName) ~= "string" then return end
+  local b, c = string.match(dynName, "%((%a):(%d+)")
+  if b and c then
+    setCurrentBandChannel(b, tonumber(c))
+  end
+end
+
+local function setCurrentFromBandField(field)
+  if type(field) ~= "table" or type(field.value) ~= "number" then return end
+  local band = BAND_NAMES[field.value]
+  if not band then return end
+  crsf.currentBand = band
+  bwItemsDirty = true
+end
+
+local function setCurrentFromChannelField(field)
+  if type(field) ~= "table" or type(field.value) ~= "number" then return end
+  local min = type(field.min) == "number" and field.min or 1
+  local ch = field.value - min + 1
+  if ch < 1 or ch > 8 then return end
+  crsf.currentChannel = ch
+  bwItemsDirty = true
+end
+
 local function crsfPush(cmd, data)
   if crossfireTelemetryPush then
     return crossfireTelemetryPush(cmd, data)
@@ -451,19 +483,15 @@ local function parseFieldData(fieldId, d)
   if type(field.name) == "string" then
     if field.type == TYPE_FOLDER and string.find(field.name, "VTX") then
       crsf.vtxFolderId = fieldId
-      if type(field.dynName) == "string" then
-        local b, c = string.match(field.dynName, "%((%a):(%d+)")
-        if b and c then
-          crsf.currentBand = b
-          crsf.currentChannel = tonumber(c)
-        end
-      end
+      setCurrentFromDynName(field.dynName)
     elseif crsf.vtxFolderId and field.parent == crsf.vtxFolderId then
       local n = string.lower(field.name)
       if n == "band" then
         crsf.bandFieldId = fieldId
+        setCurrentFromBandField(field)
       elseif n == "channel" then
         crsf.channelFieldId = fieldId
+        setCurrentFromChannelField(field)
       elseif string.find(n, "send") then
         crsf.sendFieldId = fieldId
       end
@@ -501,13 +529,7 @@ findVtxFields = function()
     if type(f) == "table" and f.type == TYPE_FOLDER
        and type(f.name) == "string" and string.find(f.name, "VTX") then
       crsf.vtxFolderId = id
-      if type(f.dynName) == "string" then
-        local b, c = string.match(f.dynName, "%((%a):(%d+)")
-        if b and c then
-          crsf.currentBand = b
-          crsf.currentChannel = tonumber(c)
-        end
-      end
+      setCurrentFromDynName(f.dynName)
       break
     end
   end
@@ -524,8 +546,10 @@ findVtxFields = function()
       local n = type(f.name) == "string" and string.lower(f.name) or ""
       if n == "band" then
         crsf.bandFieldId = id
+        setCurrentFromBandField(f)
       elseif n == "channel" then
         crsf.channelFieldId = id
+        setCurrentFromChannelField(f)
       elseif string.find(n, "send") then
         crsf.sendFieldId = id
       end
@@ -551,6 +575,46 @@ local function getCurrentText()
     return crsf.currentBand .. crsf.currentChannel .. " " .. freq .. "MHz"
   end
   return ""
+end
+
+local function isCurrentChannel(band, ch)
+  return crsf.currentBand == band and crsf.currentChannel == ch
+end
+
+local function formatChannelText(band, ch)
+  return band .. ch .. " " .. getFreq(band, ch)
+end
+
+local function formatBwChannelText(band, ch, favorite, current)
+  local prefix = ""
+  if current then prefix = prefix .. "> " end
+  if favorite then prefix = prefix .. "* " end
+  return prefix .. band .. ch .. " " .. getFreq(band, ch)
+end
+
+local function shouldShowFavoriteChecked(favorite, current)
+  return favorite and not current
+end
+
+local function getCurrentButtonColor(current)
+  if current and type(BLACK) == "number" then
+    return BLACK
+  end
+  return nil
+end
+
+local function getCurrentButtonTextColor(current)
+  if current and type(WHITE) == "number" then
+    return WHITE
+  end
+  return nil
+end
+
+local function getCurrentButtonFont(current)
+  if current and type(BOLD) == "number" then
+    return BOLD
+  end
+  return nil
 end
 
 refreshUi = function()
@@ -592,6 +656,7 @@ local function continueApply()
   elseif crsf.state == State.CONFIRMING then
     crsf.currentBand = pending.band
     crsf.currentChannel = pending.channel
+    bwItemsDirty = true
     pending.band = nil
     pending.channel = nil
     crsf.state = State.READY
@@ -715,10 +780,14 @@ local function buildUi()
       for i = rowStart, math.min(rowStart + colCount - 1, #favorites) do
         local col = i - rowStart
         local fb, fc = favorites[i].band, favorites[i].channel
+        local current = isCurrentChannel(fb, fc)
         page:button({
           x = MARGIN + col * (favBtnW + PAD), y = y,
           w = favBtnW, h = favBtnH,
-          text = fb .. fc .. " " .. getFreq(fb, fc),
+          text = formatChannelText(fb, fc),
+          color = getCurrentButtonColor(current),
+          textColor = getCurrentButtonTextColor(current),
+          font = getCurrentButtonFont(current),
           visible = isConnected,
           active = isReady,
           press = function() sendChannel(fb, fc) end,
@@ -757,11 +826,16 @@ local function buildUi()
     local c = ch
     local col = (c - 1) % 4
     local row = math.floor((c - 1) / 4)
+    local favorite = isFavorite(selectedBand, c)
+    local current = isCurrentChannel(selectedBand, c)
     page:button({
       x = MARGIN + col * (chanBtnW + PAD), y = y + row * (chanBtnH + PAD),
       w = chanBtnW, h = chanBtnH,
-      text = selectedBand .. c .. " " .. getFreq(selectedBand, c),
-      checked = isFavorite(selectedBand, c),
+      text = formatChannelText(selectedBand, c),
+      checked = shouldShowFavoriteChecked(favorite, current),
+      color = getCurrentButtonColor(current),
+      textColor = getCurrentButtonTextColor(current),
+      font = getCurrentButtonFont(current),
       visible = isConnected,
       active = isReady,
       press = function() sendChannel(selectedBand, c) end,
@@ -830,14 +904,14 @@ local function getBwItems()
   bwItemsCache = {}
   for _, fav in ipairs(favorites) do
     bwItemsCache[#bwItemsCache + 1] = {
-      label = "* " .. fav.band .. fav.channel .. " " .. getFreq(fav.band, fav.channel),
+      label = formatBwChannelText(fav.band, fav.channel, true, isCurrentChannel(fav.band, fav.channel)),
       band = fav.band,
       channel = fav.channel,
     }
   end
   for ch = 1, 8 do
     bwItemsCache[#bwItemsCache + 1] = {
-      label = selectedBand .. ch .. " " .. getFreq(selectedBand, ch),
+      label = formatBwChannelText(selectedBand, ch, false, isCurrentChannel(selectedBand, ch)),
       band = selectedBand,
       channel = ch,
     }
@@ -975,6 +1049,13 @@ if _G.__EASYVTX_TEST then
   script.__testHooks = {
     manualSort = manualSort,
     manualRemove = manualRemove,
+    formatChannelText = formatChannelText,
+    formatBwChannelText = formatBwChannelText,
+    shouldShowFavoriteChecked = shouldShowFavoriteChecked,
+    getCurrentButtonColor = getCurrentButtonColor,
+    getCurrentButtonTextColor = getCurrentButtonTextColor,
+    getCurrentButtonFont = getCurrentButtonFont,
+    isCurrentChannel = isCurrentChannel,
   }
 end
 
