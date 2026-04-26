@@ -760,7 +760,7 @@ local function buildUi()
     page:button({
       x = MARGIN + col * (chanBtnW + PAD), y = y + row * (chanBtnH + PAD),
       w = chanBtnW, h = chanBtnH,
-      text = selectedBand .. c .. "\n" .. getFreq(selectedBand, c),
+      text = selectedBand .. c .. " " .. getFreq(selectedBand, c),
       checked = isFavorite(selectedBand, c),
       visible = isConnected,
       active = isReady,
@@ -775,10 +775,12 @@ local function buildUi()
   local bottomY = y + (chanBtnH + PAD) * 2
   local footerY = bottomY + PAD
   local verText = "EasyVTXch v" .. APP_VERSION
+  local verFont = (type(TINSIZE) == "number") and TINSIZE or SMLSIZE
+  local verLineH = (verFont == SMLSIZE) and 16 or 14
   local function notError() return crsf.state ~= State.ERROR end
   local function isError() return crsf.state == State.ERROR end
 
-  -- Retry button (error only); version tucks under it when both visible
+  -- Retry (error only); when error, version label is below Retry; when not error, version is in the first footer row
   local retryW = math.floor(contentW * 0.4)
   local retryH = math.max(32, bandBtnH)
   page:button({
@@ -794,22 +796,22 @@ local function buildUi()
     end,
   })
   page:label({
-    x = MARGIN, y = footerY, w = contentW, h = 20,
-    text = verText,
+    x = MARGIN, y = footerY, w = contentW, h = verLineH,
+    text = verText, font = verFont, align = CENTER,
     visible = notError,
   })
   page:label({
-    x = MARGIN, y = footerY + retryH + PAD, w = contentW, h = 20,
-    text = verText,
+    x = MARGIN, y = footerY + retryH + PAD, w = contentW, h = verLineH,
+    text = verText, font = verFont, align = CENTER,
     visible = isError,
   })
 
   -- Bottom spacer (extends scrollable area for bottom margin)
   local spacerY = footerY
   if crsf.state == State.ERROR then
-    spacerY = footerY + retryH + PAD + 20 + MARGIN
+    spacerY = footerY + retryH + PAD + verLineH + MARGIN
   else
-    spacerY = footerY + 20 + MARGIN
+    spacerY = footerY + verLineH + MARGIN
   end
   page:label({ x = 0, y = spacerY, h = 1, text = "" })
 end
@@ -857,7 +859,8 @@ local function drawBwUi()
   lcd.drawText(1, 17, "Band:" .. selectedBand, SMLSIZE + INVERS)
 
   local items = getBwItems()
-  local maxVisible = 4
+  -- 128x64: keep list above bottom version line (avoid overlap with 4th row at y=56)
+  local maxVisible = 3
   local startY = 26
 
   if bw.cursor > #items then bw.cursor = #items end
@@ -878,7 +881,12 @@ local function drawBwUi()
   end
 
   local vh = LCD_H or 64
-  lcd.drawText(1, vh - 7, "v" .. APP_VERSION, SMLSIZE)
+  local vw = LCD_W or 128
+  local useTiny = (type(TINSIZE) == "number")
+  local vflags = useTiny and TINSIZE or SMLSIZE
+  local vdy = useTiny and 5 or 7
+  local vstr = "v" .. APP_VERSION
+  lcd.drawText(math.floor(vw / 2), vh - vdy, vstr, vflags + CENTER)
 end
 
 local function handleBwEvent(event)
