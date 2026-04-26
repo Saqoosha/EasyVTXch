@@ -289,6 +289,45 @@ assert(type(valueHooks.isCurrentChannel) == "function", "isCurrentChannel hook m
 assert(valueHooks.isCurrentChannel("R", 4), "Band/Channel field values should initialize current channel")
 print("PASS: Current channel initialized from Band/Channel values")
 
+---- Test 4.6: Current channel from VTX folder dynName ----
+print("\n=== Test 4.6: Current channel from dynName ===")
+
+mockTime = 0
+crsfOutbox = {}
+crsfInbox = {}
+script = loadfile("EasyVTXch.lua")()
+script.init()
+clearCrsfOutbox()
+
+injectCrsfResponse(0x29, deviceInfo)
+script.run(0)
+advanceTime(1)
+clearCrsfOutbox()
+
+injectCrsfResponse(0x2B, paramResp(1, 0, f1payload))
+script.run(0)
+advanceTime(1)
+clearCrsfOutbox()
+
+injectCrsfResponse(0x2B, paramResp(2, 0, f2payload))
+script.run(0)
+advanceTime(1)
+clearCrsfOutbox()
+
+injectCrsfResponse(0x2B, paramResp(3, 0, f3payload))
+script.run(0)
+advanceTime(1)
+clearCrsfOutbox()
+
+injectCrsfResponse(0x2B, paramResp(4, 0, f4payload))
+script.run(0)
+advanceTime(1)
+
+local dynNameHooks = assert(script.__testHooks, "missing script.__testHooks after dynName reload")
+assert(type(dynNameHooks.isCurrentChannel) == "function", "isCurrentChannel hook missing")
+assert(dynNameHooks.isCurrentChannel("R", 4), "VTX folder dynName should initialize current channel")
+print("PASS: Current channel initialized from VTX folder dynName")
+
 ---- Test 5: VTX Channel Send ----
 print("\n=== Test 5: Send VTX channel R6 ===")
 clearCrsfOutbox()
@@ -485,8 +524,10 @@ assert(formatChannelText("R", 4, false, false) == "R4 5769", "plain channel labe
 assert(formatChannelText("R", 4, true, false) == "R4 5769", "favorite channel label should rely on checked color")
 assert(formatChannelText("R", 4, false, true) == "R4 5769", "current channel label should rely on inverted colors")
 assert(formatChannelText("R", 4, true, true) == "R4 5769", "current favorite label should not duplicate visual markers")
-assert(formatBwChannelText("R", 4, false) == "R4 5769", "B&W plain label mismatch")
-assert(formatBwChannelText("R", 4, true) == "> R4 5769", "B&W current label should keep a text marker")
+assert(formatBwChannelText("R", 4, false, false) == "R4 5769", "B&W plain label mismatch")
+assert(formatBwChannelText("R", 4, true, false) == "* R4 5769", "B&W favorite label should keep its marker")
+assert(formatBwChannelText("R", 4, false, true) == "> R4 5769", "B&W current label should keep a text marker")
+assert(formatBwChannelText("R", 4, true, true) == "> * R4 5769", "B&W current favorite label should keep both markers")
 assert(shouldShowFavoriteChecked(false, false) == false, "plain channel should not be checked")
 assert(shouldShowFavoriteChecked(true, false) == true, "non-current favorite should stay checked")
 assert(shouldShowFavoriteChecked(true, true) == false, "current favorite should rely on inverted colors")

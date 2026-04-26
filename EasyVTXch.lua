@@ -269,6 +269,14 @@ local function setCurrentBandChannel(band, ch)
   bwItemsDirty = true
 end
 
+local function setCurrentFromDynName(dynName)
+  if type(dynName) ~= "string" then return end
+  local b, c = string.match(dynName, "%((%a):(%d+)")
+  if b and c then
+    setCurrentBandChannel(b, tonumber(c))
+  end
+end
+
 local function setCurrentFromBandField(field)
   if type(field) ~= "table" or type(field.value) ~= "number" then return end
   local band = BAND_NAMES[field.value]
@@ -475,12 +483,7 @@ local function parseFieldData(fieldId, d)
   if type(field.name) == "string" then
     if field.type == TYPE_FOLDER and string.find(field.name, "VTX") then
       crsf.vtxFolderId = fieldId
-      if type(field.dynName) == "string" then
-        local b, c = string.match(field.dynName, "%((%a):(%d+)")
-        if b and c then
-          setCurrentBandChannel(b, tonumber(c))
-        end
-      end
+      setCurrentFromDynName(field.dynName)
     elseif crsf.vtxFolderId and field.parent == crsf.vtxFolderId then
       local n = string.lower(field.name)
       if n == "band" then
@@ -526,12 +529,7 @@ findVtxFields = function()
     if type(f) == "table" and f.type == TYPE_FOLDER
        and type(f.name) == "string" and string.find(f.name, "VTX") then
       crsf.vtxFolderId = id
-      if type(f.dynName) == "string" then
-        local b, c = string.match(f.dynName, "%((%a):(%d+)")
-        if b and c then
-          setCurrentBandChannel(b, tonumber(c))
-        end
-      end
+      setCurrentFromDynName(f.dynName)
       break
     end
   end
@@ -587,8 +585,11 @@ local function formatChannelText(band, ch)
   return band .. ch .. " " .. getFreq(band, ch)
 end
 
-local function formatBwChannelText(band, ch, current)
-  return (current and "> " or "") .. band .. ch .. " " .. getFreq(band, ch)
+local function formatBwChannelText(band, ch, favorite, current)
+  local prefix = ""
+  if current then prefix = prefix .. "> " end
+  if favorite then prefix = prefix .. "* " end
+  return prefix .. band .. ch .. " " .. getFreq(band, ch)
 end
 
 local function shouldShowFavoriteChecked(favorite, current)
@@ -903,14 +904,14 @@ local function getBwItems()
   bwItemsCache = {}
   for _, fav in ipairs(favorites) do
     bwItemsCache[#bwItemsCache + 1] = {
-      label = formatBwChannelText(fav.band, fav.channel, isCurrentChannel(fav.band, fav.channel)),
+      label = formatBwChannelText(fav.band, fav.channel, true, isCurrentChannel(fav.band, fav.channel)),
       band = fav.band,
       channel = fav.channel,
     }
   end
   for ch = 1, 8 do
     bwItemsCache[#bwItemsCache + 1] = {
-      label = formatBwChannelText(selectedBand, ch, isCurrentChannel(selectedBand, ch)),
+      label = formatBwChannelText(selectedBand, ch, false, isCurrentChannel(selectedBand, ch)),
       band = selectedBand,
       channel = ch,
     }
