@@ -289,6 +289,46 @@ assert(type(valueHooks.isCurrentChannel) == "function", "isCurrentChannel hook m
 assert(valueHooks.isCurrentChannel("R", 4), "Band/Channel field values should initialize current channel")
 print("PASS: Current channel initialized from Band/Channel values")
 
+---- Test 4.55: ELRS 4.x field names ("Band/Enable", VTX Admin disabled) ----
+print("\n=== Test 4.55: ELRS 4.x Band/Enable field ===")
+
+mockTime = 0
+crsfOutbox = {}
+crsfInbox = {}
+script = loadfile("EasyVTXch.lua")()
+script.init()
+clearCrsfOutbox()
+
+injectCrsfResponse(0x29, deviceInfo)
+script.run(0)
+advanceTime(1)
+clearCrsfOutbox()
+
+-- Band disabled: ELRS 4.x sends the folder without a dynName
+local f1payloadV4 = { 0, 11 }
+for _, b in ipairs(strBytes("VTX Administrator")) do f1payloadV4[#f1payloadV4 + 1] = b end
+f1payloadV4[#f1payloadV4 + 1] = 0
+local f2payloadV4 = { 1, 9 }
+for _, b in ipairs(strBytes("Band/Enable")) do f2payloadV4[#f2payloadV4 + 1] = b end
+for _, b in ipairs(strBytes("Disabled;A;B;E;F;R;L")) do f2payloadV4[#f2payloadV4 + 1] = b end
+f2payloadV4[#f2payloadV4 + 1] = 0 -- value (Disabled)
+f2payloadV4[#f2payloadV4 + 1] = 0 -- min
+f2payloadV4[#f2payloadV4 + 1] = 6 -- max
+-- Channel is hidden while Band is Disabled (type byte has 0x80 set)
+local f3payloadV4 = { 1, 0x80 }
+for i = 3, #f3payload do f3payloadV4[i] = f3payload[i] end
+
+for id, p in ipairs({ f1payloadV4, f2payloadV4, f3payloadV4, f4payload }) do
+  injectCrsfResponse(0x2B, paramResp(id, 0, p))
+  script.run(0)
+  advanceTime(1)
+  clearCrsfOutbox()
+end
+
+local v4Hooks = assert(script.__testHooks, "missing script.__testHooks after reload")
+assert(v4Hooks.isReady(), "ELRS 4.x fields (Band/Enable) should reach READY")
+print("PASS: ELRS 4.x Band/Enable field recognized")
+
 ---- Test 4.6: Current channel from VTX folder dynName ----
 print("\n=== Test 4.6: Current channel from dynName ===")
 
