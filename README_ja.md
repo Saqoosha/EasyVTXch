@@ -95,7 +95,7 @@ SYS → Tools → ELRS → 待ち → VTX Admin → Band → Channel → Power �
 |------|--------|
 | "TX module not found" | ELRS モジュールの電源が入っていてバインド済みか確認。EdgeTX のプロトコル設定で CRSF が選択されているか確認。 |
 | "VTX Admin not found" | ELRS 側で VTX Admin が有効になっている必要があります。ExpressLRS Configurator か ELRS Lua スクリプトで確認してください。 |
-| "VTX fields incomplete" | ELRS ファームウェアが古い可能性があります。ELRS 3.x 以降にアップデートしてください。 |
+| "VTX fields incomplete" | ELRS 4.x の場合は EasyVTXch を最新版に更新してください（4.x で Band フィールドの名前が変わりました）。それ以外は ELRS ファームウェアが古い可能性があります。ELRS 3.x 以降にアップデートしてください。 |
 | Tools にスクリプトが表示されない | ファイル名が `EasyVTXch.lua`（大文字小文字を区別）であること、`/SCRIPTS/TOOLS/` に配置されていることを確認。 |
 | ファイルを置き換えても更新されない | 同じフォルダの `EasyVTXch.luac` を削除してください。EdgeTX がキャッシュを使っています。 |
 | 送信完了と表示されるが実際の VTX 周波数が変わらない | まず Betaflight OSD から VTX 設定を変更できるか確認してください。OSD からの VTX 制御が動かないなら EasyVTXch も動きません — 先に SmartAudio/Tramp の配線と Betaflight のテレメトリー設定を修正してください。 |
@@ -125,7 +125,7 @@ lua5.4 test_mock.lua
 
 `lua5.4` が入っていない環境では、システムの Lua 5.x で実行してもよい（例: macOS/Homebrew なら `lua test_mock.lua`）。
 
-テスト内容: 初期 ping、デバイス情報解析、フィールド列挙、現在チャンネル初期化（VTX フォルダの動的表示名と Band/Channel フィールド値）、VTX 送信シーケンス（band/channel/send/confirm の値検証）、お気に入りファイル形式、UI ラベル用ヘルパー。CRSF 通信と LVGL UI は実機または EdgeTX Companion シミュレータで確認が必要。
+テスト内容: 初期 ping、デバイス情報解析、フィールド列挙、現在チャンネル初期化（VTX フォルダの動的表示名と Band/Channel フィールド値）、ELRS 4.x のフィールド名（`Band/Enable`）、VTX 送信シーケンス（band/channel/send/confirm の値検証）、お気に入りファイル形式、UI ラベル用ヘルパー。CRSF 通信と LVGL UI は実機または EdgeTX Companion シミュレータで確認が必要。
 
 ## ライセンス
 

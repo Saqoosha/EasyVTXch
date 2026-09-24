@@ -95,7 +95,7 @@ Favorites are marked with a `*` and shown at the top of the list. The current ch
 |---------|----------|
 | "TX module not found" | Make sure your ELRS module is powered on and bound. Check that CRSF is selected as the protocol in EdgeTX. |
 | "VTX Admin not found" | VTX Admin must be enabled in ELRS. Connect to your module via ExpressLRS Configurator or Lua script and verify VTX Admin is available. |
-| "VTX fields incomplete" | Your ELRS firmware may be too old. Update to ELRS 3.x or newer. |
+| "VTX fields incomplete" | On ELRS 4.x, update EasyVTXch to the latest version (4.x renamed the Band field). Otherwise your ELRS firmware may be too old — update to ELRS 3.x or newer. |
 | Script doesn't appear in Tools | Make sure the file is named `EasyVTXch.lua` (case-sensitive) and is in `/SCRIPTS/TOOLS/`. |
 | Script doesn't update after replacing file | Delete `EasyVTXch.luac` from the same folder. EdgeTX caches compiled scripts. |
 | Script says "sent" but VTX frequency doesn't actually change | Make sure you can change VTX settings from Betaflight OSD first. If OSD VTX control doesn't work, EasyVTXch won't work either — fix your SmartAudio/Tramp wiring and Betaflight telemetry setup first. |
@@ -125,7 +125,7 @@ lua5.4 test_mock.lua
 
 If `lua5.4` is not installed, use your system Lua 5.x (for example `lua test_mock.lua` on macOS/Homebrew).
 
-Tests cover: init ping, device info parsing, field enumeration, current-channel initialization (VTX folder dynName and Band/Channel field values), VTX send sequence (with value assertions for band/channel/send/confirm), favorites file format, and UI label helpers. CRSF communication and LVGL UI must still be tested on real hardware or the EdgeTX Companion simulator.
+Tests cover: init ping, device info parsing, field enumeration, current-channel initialization (VTX folder dynName and Band/Channel field values), ELRS 4.x field names (`Band/Enable`), VTX send sequence (with value assertions for band/channel/send/confirm), favorites file format, and UI label helpers. CRSF communication and LVGL UI must still be tested on real hardware or the EdgeTX Companion simulator.
 
 ## License
 
