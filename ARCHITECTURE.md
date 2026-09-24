@@ -42,7 +42,7 @@ EasyVTXch.lua
 | Type | Value | Used For |
 |------|-------|----------|
 | `UINT8` | `0` | Channel number |
-| `TEXT_SELECTION` | `9` | Band selection (Off/A/B/E/F/R) |
+| `TEXT_SELECTION` | `9` | Band selection (`Off`/`Disabled`, A/B/E/F/R/L) |
 | `FOLDER` | `11` | VTX Administrator folder |
 | `COMMAND` | `13` | Send VTx button |
 
@@ -85,6 +85,8 @@ The VTX Administrator folder's dynamic name encodes current state:
 ```
 Parsed with: `string.match(dynName, "%((%a):(%d+)")`
 
+When Band is Off/Disabled, ELRS sends no dynamic name and the folder shows its static name `VTX Administrator` in ELRS Lua (both 3.x and 4.x).
+
 EasyVTXch uses this as a **best-effort** source for `crsf.currentBand` / `crsf.currentChannel` when the pattern matches.
 
 ### Current Channel From Field Values (Preferred)
@@ -94,6 +96,17 @@ To keep the UI aligned with ELRS on first launch, EasyVTXch also initializes the
 
 - **Band (`TEXT_SELECTION`)**: maps `field.value` (1-based index: A=1..R=5) → `BAND_NAMES[value]`
 - **Channel (`UINT8`)**: maps CRSF value → UI channel with `uiCh = field.value - field.min + 1` (ELRS typically uses `min=1`)
+
+### VTX Field Names by ELRS Version
+Children of the VTX folder are matched by lowercased name. The band name changed in ELRS 4.x, so `isBandFieldName()` accepts both:
+
+| Field | ELRS 3.x | ELRS 4.x |
+|-------|----------|----------|
+| Band | `Band` (`Off;A;B;E;F;R;L`) | `Band/Enable` (`Disabled;A;B;E;F;R;L`) |
+| Channel | `Channel` | `Channel` (hidden bit `0x80` set while Band is Disabled) |
+| Send | `Send VTx` | `Send VTx` |
+
+Index values and channel `min=1` are unchanged. Firmware source: 3.x `src/lib/LUA/tx_devLUA.cpp`, 4.x `src/lib/tx-crsf/TXModuleParameters.cpp`. A name mismatch shows up as "VTX fields incomplete" (folder found, children not).
 
 These updates happen during `parseFieldData()` (enumeration) and are re-applied in `findVtxFields()` after a full scan.
 
@@ -277,8 +290,8 @@ band:R
 
 ## Band Values (CRSF)
 
-ELRS TEXT_SELECTION options: `"Off;A;B;E;F;R"`
-- Off=0, A=1, B=2, E=3, F=4, R=5
+ELRS TEXT_SELECTION options: `"Off;A;B;E;F;R;L"` (3.x) / `"Disabled;A;B;E;F;R;L"` (4.x)
+- Off/Disabled=0, A=1, B=2, E=3, F=4, R=5 (L=6 is not used by EasyVTXch)
 
 ## Timeouts
 

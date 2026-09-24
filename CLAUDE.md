@@ -1,13 +1,12 @@
 # EasyVTXch — Claude Code Instructions
 
 ## Project Overview
-EdgeTX Lua scripts for simplified VTX channel changing via ELRS CRSF protocol. Includes a tool script (main UI + favorites management) and a widget for background VTX switching via 6-position switch.
+EdgeTX Lua script for simplified VTX channel changing via ELRS CRSF protocol.
 
 The tool script highlights the **current** VTX channel reported by ELRS (via VTX Admin Band/Channel field values, with a fallback to the VTX folder dynamic name when it includes `(B:ch:...)`). Color LCD uses LVGL button styling; B&W uses text prefixes (`>` current, `*` favorite).
 
 ## Key Files
 - `EasyVTXch.lua` — main tool script (goes in `/SCRIPTS/TOOLS/` on SD card)
-- `EasyVTXch_widget.lua` — widget for 6-pos switch VTX control (goes in `/WIDGETS/EasyVTXch/main.lua` on SD card)
 - `test_mock.lua` — desktop Lua 5.4 mock tests for B&W mode and CRSF protocol
 - `ARCHITECTURE.md` — internal architecture and protocol details
 
@@ -46,26 +45,14 @@ The tool script highlights the **current** VTX channel reported by ELRS (via VTX
 - Handle `crossfireTelemetryPop` returning `false` (not just `nil`) — use `not cmd` instead of `cmd == nil`
 - **Channel values are 1-based** in ELRS CRSF (`min=1, max=8`). Use `field.min + (uiChannel - 1)` to convert from UI (1-8). The firmware internally converts to 0-based via `SetVtxChannel(arg - 1)`. Never hardcode the offset — use the `min` from CRSF enumeration
 - **Band values are 1-based** TEXT_SELECTION indices (A=1, B=2, E=3, F=4, R=5)
+- **Field names change between ELRS versions** — ELRS 4.x renamed `Band` → `Band/Enable`. Match children of the VTX folder through `isBandFieldName()`, never a literal `"band"`. To check names for a new ELRS release, read `src/lib/tx-crsf/TXModuleParameters.cpp` at that tag (3.x: `src/lib/LUA/tx_devLUA.cpp`). Symptom of a mismatch: "VTX fields incomplete"
 - **Validate PARAM_RESP fieldId** before advancing write state — check `data[3]` matches the expected field
 
 ### Deployment
 - **Always delete `.luac` when updating `.lua`!** EdgeTX caches compiled bytecode
 - Tool script to simulator: `rm -f ~/Documents/EdgeTX_SD/SCRIPTS/TOOLS/EasyVTXch.luac && cp EasyVTXch.lua ~/Documents/EdgeTX_SD/SCRIPTS/TOOLS/`
 - Tool script to real SD card (TX15): `rm -f /Volumes/TX15/SCRIPTS/TOOLS/EasyVTXch.luac && cp EasyVTXch.lua /Volumes/TX15/SCRIPTS/TOOLS/`
-- Widget to simulator: `mkdir -p ~/Documents/EdgeTX_SD/WIDGETS/EasyVTXch && rm -f ~/Documents/EdgeTX_SD/WIDGETS/EasyVTXch/main.luac && cp EasyVTXch_widget.lua ~/Documents/EdgeTX_SD/WIDGETS/EasyVTXch/main.lua`
-- Widget to real SD card (TX16S): `mkdir -p /Volumes/TX16S/WIDGETS/EasyVTXch && rm -f /Volumes/TX16S/WIDGETS/EasyVTXch/main.luac && cp EasyVTXch_widget.lua /Volumes/TX16S/WIDGETS/EasyVTXch/main.lua`
 - **Always delete `.luac` AND copy `.lua` on ALL targets** — forgetting either causes stale code to run
-
-### Widget (EasyVTXch_widget.lua)
-- Runs as EdgeTX widget with `background()` function for continuous 6-pos switch monitoring
-- Requires tool script to have been run first (needs `easyvtxch.fav` + `easyvtxch.cache`)
-- Auto-detects switch source: `getFieldInfo("6pos")` for TX16S (P2 Multipos), falls back to `getSourceIndex("GR1")` for TX15 (function switch group)
-- TX15 setup: Radio Setup > Hardware > Customizable Switches: all 6 buttons → 2POS, Group 1, "Always On" enabled
-- Maps 6 switch positions to first 6 favorites (sorted by frequency, same order as tool script)
-- CRSF field IDs verified from cache on startup (no full enumeration — widget-only cache verification)
-- Widget `background()` runs in `lsWidgets` Lua state (separate from tool script's `lsScripts`)
-- Uses `lcd.*` API for drawing (not LVGL) — compatible with widget zone system
-- First switch read records position without sending (prevents unwanted send on startup)
 
 ## Testing
 ```bash
@@ -73,7 +60,7 @@ lua5.4 test_mock.lua
 ```
 If `lua5.4` is not available, `lua test_mock.lua` is fine on environments where `lua` is Lua 5.x.
 
-Tests cover: init ping, device info parsing, field enumeration, current-channel initialization (VTX folder dynName and Band/Channel field values), VTX send sequence (with value assertions for band/channel/send/confirm), favorites file format, and UI label/checked helper behavior. CRSF communication and LVGL UI must be tested on real hardware or EdgeTX Companion simulator.
+Tests cover: init ping, device info parsing, field enumeration, current-channel initialization (VTX folder dynName and Band/Channel field values), ELRS 4.x field names (`Band/Enable`), VTX send sequence (with value assertions for band/channel/send/confirm), favorites file format, and UI label/checked helper behavior. CRSF communication and LVGL UI must be tested on real hardware or EdgeTX Companion simulator.
 
 ## Font Constants
 Use EdgeTX standard constants: `SMLSIZE`, `MIDSIZE`, `DBLSIZE`, `XXLSIZE`, `BOLD`, `INVERS`, `CENTER`

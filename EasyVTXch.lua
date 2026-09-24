@@ -277,6 +277,11 @@ local function setCurrentFromDynName(dynName)
   end
 end
 
+-- ELRS 3.x names the field "Band"; 4.x renamed it to "Band/Enable"
+local function isBandFieldName(n)
+  return n == "band" or n == "band/enable"
+end
+
 local function setCurrentFromBandField(field)
   if type(field) ~= "table" or type(field.value) ~= "number" then return end
   local band = BAND_NAMES[field.value]
@@ -486,7 +491,7 @@ local function parseFieldData(fieldId, d)
       setCurrentFromDynName(field.dynName)
     elseif crsf.vtxFolderId and field.parent == crsf.vtxFolderId then
       local n = string.lower(field.name)
-      if n == "band" then
+      if isBandFieldName(n) then
         crsf.bandFieldId = fieldId
         setCurrentFromBandField(field)
       elseif n == "channel" then
@@ -544,7 +549,7 @@ findVtxFields = function()
   for id, f in pairs(crsf.fields) do
     if type(f) == "table" and f.parent == crsf.vtxFolderId then
       local n = type(f.name) == "string" and string.lower(f.name) or ""
-      if n == "band" then
+      if isBandFieldName(n) then
         crsf.bandFieldId = id
         setCurrentFromBandField(f)
       elseif n == "channel" then
@@ -1056,6 +1061,7 @@ if _G.__EASYVTX_TEST then
     getCurrentButtonTextColor = getCurrentButtonTextColor,
     getCurrentButtonFont = getCurrentButtonFont,
     isCurrentChannel = isCurrentChannel,
+    isReady = isReady,
   }
 end
 
